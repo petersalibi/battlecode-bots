@@ -210,6 +210,47 @@ class Navigator:
                 return False
         return False
 
+    def dash_away(self, threats, home_field=None):
+        """Dash to the landing furthest from the threats (ties: bushes, then towards home), when
+        that beats where we stand. A fleeing body that dashes and then steps opens three tiles on
+        a melee pursuer in one turn, and crosses holes the pursuer may not be able to follow."""
+        w = self.w
+        if not threats or not w.can_cast or w.cast_exclusive:
+            return False
+        for rec in w.abilities:
+            if not rec.is_dash:
+                continue
+            try:
+                if rec.ability.cooldown() > 0:
+                    return False
+                blocked = self.blocked()
+                landings = rec.ability.valid_tiles() & ~blocked
+
+                def key(tile):
+                    nearest = min(tile.chebyshev_distance(t) for t in threats)
+                    home = -home_field.get(tile) if home_field is not None else 0
+                    return (nearest, 1 if w.bushes.is_set(tile) else 0, home)
+
+                here = key(w.pos)
+                options = [(key(tile), tile.x, tile.y, tile) for tile in landings.positions()]
+                options = [o for o in options if o[0] > here]
+                options.sort(reverse=True)
+                for _k, _x, _y, tile in options[:3]:
+                    try:
+                        if rec.ability.use(tile):
+                            w.can_cast = False
+                            self.occupy(w.pos)
+                            w.pos = tile
+                            w.at_spawn = w.spawn_ally.is_set(tile)
+                            w.in_bush = w.bushes.is_set(tile)
+                            blocked.set(tile, True)
+                            return True
+                    except Exception:
+                        continue
+            except Exception:
+                return False
+        return False
+
     def _move(self, dest):
         w = self.w
         try:

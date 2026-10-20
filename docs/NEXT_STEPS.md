@@ -17,7 +17,13 @@ Written 2026-10-21, after submission 6. Deadline early November 2026.
 
 ## Ranked by expected gain per day of work
 
-### 1. Deaths (highest leverage, scripted)
+### 1. Deaths (highest leverage, scripted) — first pass shipped as v7
+
+Done 2026-10-21: spawn gate against spawn camping, group-aware flee range, dash away when
+fleeing, capture standoff resolution. Still open: the lessons below, and the elk-arena pattern
+of the whole enemy team sitting at our exit (a group exit, all bodies leaving together, or an
+alternative exit through a dash over holes, would beat waiting).
+
 
 A side still loses about 15 bodies a game, and against v4 the dash bot's win is mostly the death
 gap (763 vs 1,363). Most deaths are champion kills of bodies already fleeing, plus the walk back

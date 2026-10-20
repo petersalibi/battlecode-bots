@@ -10,6 +10,7 @@ import cambc
 from cambc import game_map, vision
 
 import config
+import fuel
 import memory_codec
 
 _fuel = _cambc.fuel_remaining
@@ -567,6 +568,15 @@ class World:
             return sum(self.me.item_count())
         except Exception:
             return 0
+
+    def enemy_spawn_field(self):
+        """Walking turns to the enemy spawn, built once when the fuel is there (None until then)."""
+        if self._enemy_spawn_field is None:
+            if not fuel.can_afford(config.FIELD_COST_PER_TILE * self.width * self.height, config.FIELD_BUILD_RESERVE):
+                return None
+            self._enemy_spawn_field = DistanceField()
+            self._enemy_spawn_field.compute(self.static_blocked & ~self.spawn_enemy, self.spawn_enemy, Bitboard())
+        return self._enemy_spawn_field
 
     def turns_to_enemy_spawn(self):
         if self._enemy_spawn_field is None:

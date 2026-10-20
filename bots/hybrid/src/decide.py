@@ -27,6 +27,7 @@ class Decider:
         self.target_bodies = 1        # champions the plan needs on the target group
         self.hold_since = -1          # round we started waiting for allies, or -1
         self.capture_group = None
+        self.capture_since = -1       # round the current capture started (standoff detection)
         self.last_scores = None
         self.last_source = "script"
         self.camp_cache = None
@@ -76,6 +77,8 @@ class Decider:
         rounds_left = w.rounds_left()
         endgame = rounds_left <= config.ENDGAME_ROUNDS
         enemy_near = w.enemy_within(config.FLEE_ENEMY_RANGE)
+        if config.FLEE_GROUP and len(w.enemies) >= 2 and w.enemy_within(config.FLEE_ENEMY_RANGE + config.FLEE_GROUP_EXTRA):
+            enemy_near = True                                         # a group closes faster than one body
         balance = w.power_balance()
 
         # Farm: the best camp's value rate, scaled so a decent camp scores about 1.3.
@@ -173,6 +176,11 @@ class Decider:
                 return self._set_mode(FLEE, "rule")
         if not w.at_spawn and self.camp_hitting(w) and w.hp_ratio < config.FLEE_HEALTH:
             return self._set_mode(FLEE, "rule")                       # a camp is finishing us off
+        # Spawn camping (elk arena on the ladder: 79 deaths, most within 8 turns of our spawn at
+        # full health, three enemies in sight): the spawn heals and enemies cannot enter it, so a
+        # body that would walk out into a stronger group stays until it has left or allies are up.
+        if config.SPAWN_GATE and w.at_spawn and w.enemies and w.enemy_within(config.SPAWN_GATE_RANGE)                 and w.power_balance() < config.SPAWN_GATE_BALANCE:
+            return self._set_mode(RECALL, "rule")
 
         # The script always runs: it builds and scores the candidates the features summarise, and
         # it is the fallback. The network then costs only the feature pass and one forward.
@@ -246,6 +254,19 @@ class Decider:
             else:
                 score *= max(0.1, 1.0 - config.DANGER_WEIGHT * cand.damage / budget)
         cand.bodies = bodies
+        if config.CAMP_ENEMY_PENALTY and g.anchor is not None:
+            # Top ladder teams spend half as many turns as we do with an enemy within 5 tiles. A
+            # camp with an enemy seen near it lately is worth less than its gems say; so, when
+            # CAMP_ENEMY_SIDE_FACTOR is below 1, is a camp nearer the enemy spawn than ours.
+            recent = w.round - config.CAMP_ENEMY_MEMORY
+            for pos, seen, _ratio in w.enemy_memory.values():
+                if seen >= recent and pos.chebyshev_distance(g.anchor) <= config.CAMP_ENEMY_RANGE:
+                    score *= config.CAMP_ENEMY_FACTOR
+                    break
+            if config.CAMP_ENEMY_SIDE_FACTOR < 1.0:
+                enemy_field = w.enemy_spawn_field()
+                if enemy_field is not None and enemy_field.get(g.anchor) < w.spawn_field.get(g.anchor):
+                    score *= config.CAMP_ENEMY_SIDE_FACTOR
         if cand.claimed and not needs_help:
             score *= config.CLAIMED_PENALTY                           # do not stack on an easy camp
         if self.target_group is not None and g.index == self.target_group.index:

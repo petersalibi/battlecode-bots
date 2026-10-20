@@ -107,6 +107,18 @@ first (`DASH_DRAFT_PRIORITY`); the flag travels in the plan. Starvation went fro
 1008-0 wins. Against v5 the whole package scores 39-31 (+63 gems) with no fuel exhaustions, and
 54-16 (+241, deaths 763 against 1,363) against v4.
 
+### Deaths (2026-10-21)
+
+Mirror play cannot show how we die on the ladder, so the ladder replays were dumped and read.
+Three findings became code: `SPAWN_GATE` (on spawn, a stronger enemy group within 10 keeps the
+body home: recall mode shops and waits), `FLEE_GROUP` (two or more enemies count as near three
+tiles further out), `FLEE_DASH_AWAY` (a fleeing dash champion dashes to the landing furthest from
+the threats before stepping), and the capture standoff rule (`CAPTURE_FIGHT_BALANCE`,
+`CAPTURE_STANDOFF_TURNS`). Mirror sweeps of the full set: 34-36 (-52 gems) against v6 and 46-24
+(+83) against v5, level within noise; the standoff rule alone was 37-33 and 43-27. The judge is
+the ladder: v6 sat at rank 450 (1,452) with 10 wins in its last 25, losing elk arena, collision and
+contest by feeding 40 to 80 bodies a game.
+
 ## Team memory (`memory_codec.py`)
 
 Shared memory: one claim byte per body (2-bit status, 6-bit group index), byte 6 the last round an
@@ -264,12 +276,18 @@ fuel budgeting above. Sweep against the v1 tag on the 21-map pool: 31-11.
   network's reserve grows by 40K per group beyond 30 there, which removed the exhaustions in the
   sweeps, at the price of the network running less on maps with many groups (lanes, islands).
 
-- **Deaths.** Down from 14 to 8.5 per side per game after the 2026-10-20 tuning (recall at 50%
-  health, no new camp below 45%, kill steals below 40%, and a retreat from camps that would
-  finish us: camp deaths fell from 322 to 55 per sweep). What remains is almost all champion
-  kills of bodies already in flee mode: fleeing at walking speed from melee does not work, and
-  fleeing towards allies tested worse. `tools/death_report.py` breaks a sweep down by killer,
-  mode, health and map.
+- **Deaths.** About 17 per side per game in mirror play; top ladder winners lose 5 to 6 and
+  losers 12 to 14. On the ladder our losses average 28 deaths a game. The 2026-10-21 pass found
+  the pattern in our own ladder replays rather than in the mirror: a team camping our spawn
+  exit (elk arena: 79 deaths, most within 8 turns of spawn at full health with three enemies in
+  sight) and a 1,800-round standoff on a captured region (corridors, 0 gems). Fixes: a spawn
+  gate (stay on spawn while a stronger group is in sight: it heals and they cannot enter), a
+  group-aware flee range, a dash away from pursuers, and on a contested region fight the
+  intruder unless clearly weaker, else give the region up for 60 rounds. Threshold tweaks alone
+  (flee at 40%, flee at parity, recall at 60%, fight only at 2x) all tested level or worse in
+  the mirror, and a penalty on camps near remembered enemies cut deaths but cost more gems than
+  it saved. `tools/death_report.py` breaks a sweep down by killer, mode, health and map; the
+  replay dumps of our ladder games (`data/replays/ours/`) show the ladder-specific patterns.
 - **Crowding stalls.** `stuck` fires 20 to 50 times a game on concentrated-wealth and boss-battle:
   several bodies converge on one camp block with one free approach tile. The guard releases them,
   but a helper cap based on the block's free ring would avoid the wait.

@@ -45,6 +45,9 @@ GEM_VALUE = 1.0
 GOLD_VALUE = 0.1            # gems win games; gold only buys shards (150 gold = one emblem). Camps
                             # now pay about ten gold per gem, so this keeps gold a minority of value.
 CAPTURE_TURNS = 5
+CAPTURE_FIGHT_BALANCE = 0.9 # on a contested region, fight the intruder unless clearly weaker than this ...
+CAPTURE_STANDOFF_TURNS = 12 # give a contested region up after this many turns face to face ...
+CAPTURE_STANDOFF_AVOID = 60 # ... and leave it alone for this long
 MAX_CAMP_CANDIDATES = 12
 MAX_CAMP_TURNS = 60         # ignore camps further than this
 CLAIMED_PENALTY = 0.35      # score multiplier when another ally has claimed the group
@@ -68,6 +71,17 @@ FIGHT_RANGE = 6             # consider enemies within this Chebyshev distance
 KILL_STEAL_HEALTH = 0.40    # attack an enemy below this regardless of balance (kills pay 100 gold + bag)
 FLEE_POWER_RATIO = 0.7      # flee when our power is below this fraction of theirs
 FLEE_ENEMY_RANGE = 5
+FLEE_DASH_AWAY = True       # a fleeing dash champion dashes away from the threats before stepping
+SPAWN_GATE = True           # on spawn with a stronger enemy group in sight: stay (heal, safe) instead of walking out
+SPAWN_GATE_RANGE = 10       # "in sight": an enemy within this of the spawn tile we stand on
+SPAWN_GATE_BALANCE = 1.0    # stay while our local power (allies in FIGHT_RANGE count) is below theirs times this
+FLEE_GROUP = True           # two or more enemies count as near from further away ...
+FLEE_GROUP_EXTRA = 3        # ... this much beyond FLEE_ENEMY_RANGE
+CAMP_ENEMY_PENALTY = False  # camps where an enemy was seen lately score lower
+CAMP_ENEMY_RANGE = 8        # "near": an enemy within this of the group's anchor ...
+CAMP_ENEMY_MEMORY = 30      # ... seen within this many rounds ...
+CAMP_ENEMY_FACTOR = 0.5     # ... multiplies the camp's score by this
+CAMP_ENEMY_SIDE_FACTOR = 1.0  # below 1: a camp nearer the enemy spawn than ours is worth this much
 
 # ---- Ward --------------------------------------------------------------------
 WARD_REPLACE_EVERY = 40

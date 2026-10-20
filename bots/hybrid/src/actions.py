@@ -259,14 +259,30 @@ class Actions:
         g, travel = captures[0]
         self.status = memory_codec.STATUS_CAPTURE
         self.claim_group = g.index
-        self.d.capture_group = g
+        d = self.d
+        if d.capture_group is not g:
+            d.capture_group = g
+            d.capture_since = w.round
         if g.tiles.is_set(w.pos):
-            # Standing on the region: stay, and hit anything hostile in reach.
+            # Standing on the region: stay, and hit anything hostile in reach. An enemy on the
+            # region resets the timer every round, so a standoff never ends on its own (corridors
+            # on the ladder: 1,800 rounds face to face, 0 gems): fight it when we are not weaker
+            # and it is close, otherwise give the region up for a while after a few turns.
             self.waiting = True
             enemy = self.d.choose_fight_target(turn, w)
+            contested = any(g.tiles.is_set(e.pos) for e in w.enemies)
             if enemy is not None and enemy.dist <= w.attack_range:
                 self._cast_offensive(enemy.champion, enemy.pos, against_camp=False)
                 self._attack_with_reset(enemy.champion, enemy.pos)
+            elif contested and enemy is not None and enemy.dist <= config.FIGHT_RANGE                     and w.power_balance() >= config.CAPTURE_FIGHT_BALANCE and w.hp_ratio >= config.FIGHT_MIN_HEALTH:
+                self.waiting = False
+                return self.fight(turn)
+            if contested and w.round - d.capture_since > config.CAPTURE_STANDOFF_TURNS:
+                g.avoid_until = w.round + config.CAPTURE_STANDOFF_AVOID
+                d.capture_group = None
+                d.camp_cache = None
+                self.waiting = False
+                return self.farm(turn)
             self.ward_here()
             return
         # Prefer a free tile of the region. Camps are dead, so only units can block.
@@ -386,8 +402,9 @@ class Actions:
             if rec.is_cc and rec.enemies and nearest.dist <= rec.range and self._ready(rec) and not rec.exclusive:
                 self._cast(rec, nearest.champion)
                 break
+        dashed = config.FLEE_DASH_AWAY and self.nav.dash_away(threats, w.spawn_field)
         moved = self.nav.step_away(threats, w.spawn_field)
-        if self.nav.try_dash(w.spawn_field):
+        if dashed or self.nav.try_dash(w.spawn_field):
             return
         if not moved and nearest.dist <= w.attack_range:
             self._attack_with_reset(nearest.champion, nearest.pos)
