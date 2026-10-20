@@ -37,7 +37,7 @@ const _: () = {
     assert!(core::mem::offset_of!(GameItemInfo, passive_magnitude) == 24);
     assert!(core::mem::offset_of!(GameItemInfo, combine_cost) == 36);
 };
-/// Exact chunked map/storage layout returned by the host; queried without a global cache.
+/// Exact chunked map/storage layout returned by the host; validated then cached by the board module.
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub(crate) struct Metadata {
@@ -134,6 +134,15 @@ pub(crate) struct ChampionInfo {
     pub attack_range: i32,
     /// Packed engine state flags.
     pub state: i32,
+}
+/// Immutable champion team and design tag, readable without vision.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub(crate) struct ChampionIdentity {
+    /// Absolute engine team ID, decoded into a relative team by typed wrappers.
+    pub team: i32,
+    /// Raw engine type tag, validated before exposure as a typed value.
+    pub kind: i32,
 }
 /// Immutable champion design stats in the engine C layout, not current combat stats.
 #[repr(C)]
@@ -298,6 +307,8 @@ pub(crate) struct WardInfo {
     pub timer: i32,
     /// Whether this ward is disabled.
     pub disabled: u8,
+    /// Owning champion handle captured while the ward is visible.
+    pub owner: u32,
 }
 /// Engine control-ward observation record; does not imply an action-target handle.
 #[repr(C)]
@@ -329,6 +340,32 @@ pub(crate) struct TeleportInfo {
     pub timer: i32,
     /// Channel type: 4 for teleport crystal; 3 is the retired scroll.
     pub channel_type: u32,
+}
+/// Debug-mode `debug_block` fuel window, linked only by a debug-built bot.
+#[cfg(all(cambc_debug, not(test)))]
+#[link(wasm_import_module = "env")]
+unsafe extern "C" {
+    /// Pause fuel accounting: the following code runs in a free window.
+    #[link_name = "fuel_pause"]
+    pub(crate) fn fuel_pause() -> i32;
+    /// Resume fuel accounting after a `fuel_pause` window.
+    #[link_name = "fuel_resume"]
+    pub(crate) fn fuel_resume();
+    /// Adjust charged fuel by `delta` (negative removes), saturating at 0.
+    #[link_name = "fuel_adjust"]
+    pub(crate) fn fuel_adjust(delta: i64);
+}
+#[cfg(all(cambc_debug, test))]
+pub(crate) unsafe fn fuel_pause() -> i32 {
+    crate::fake::call("fuel_pause", &[]) as i32
+}
+#[cfg(all(cambc_debug, test))]
+pub(crate) unsafe fn fuel_resume() {
+    let _ = crate::fake::call("fuel_resume", &[]);
+}
+#[cfg(all(cambc_debug, test))]
+pub(crate) unsafe fn fuel_adjust(_delta: i64) {
+    let _ = crate::fake::call("fuel_adjust", &[]);
 }
 #[cfg(not(test))]
 #[link(wasm_import_module = "env")]
@@ -390,6 +427,10 @@ unsafe extern "C" {
     pub(crate) fn enemy_occupancy(out_board: *mut u64) -> i32;
     #[link_name = "board_camp_occupancy"]
     pub(crate) fn camp_occupancy(out_board: *mut u64) -> i32;
+    #[link_name = "board_awake_camp_occupancy"]
+    pub(crate) fn awake_camp_occupancy(out_board: *mut u64) -> i32;
+    #[link_name = "board_asleep_camp_occupancy"]
+    pub(crate) fn asleep_camp_occupancy(out_board: *mut u64) -> i32;
     #[link_name = "board_ally_ward_occupancy"]
     pub(crate) fn ally_ward_occupancy(out_board: *mut u64) -> i32;
     #[link_name = "board_enemy_ward_occupancy"]
@@ -412,6 +453,8 @@ unsafe extern "C" {
         capacity: u32,
         out_count: *mut u32,
     ) -> i32;
+    #[link_name = "teleport_at"]
+    pub(crate) fn teleport_at(x: i32, y: i32, out_teleport: *mut TeleportInfo) -> i32;
     #[link_name = "board_ward_vision_mask"]
     pub(crate) fn ward_vision(x: i32, y: i32, out_board: *mut u64) -> i32;
     #[link_name = "board_ally_altar_lock_occupancy"]
@@ -475,6 +518,8 @@ unsafe extern "C" {
     ) -> i32;
     #[link_name = "champion"]
     pub(crate) fn champion(champion: u32, out_info: *mut ChampionInfo) -> i32;
+    #[link_name = "champion_identity"]
+    pub(crate) fn champion_identity(champion: u32, out_identity: *mut ChampionIdentity) -> i32;
     #[link_name = "champion_design"]
     pub(crate) fn champion_design(kind: i32, out_design: *mut ChampionDesign) -> i32;
     #[link_name = "champion_restrictions"]
@@ -529,12 +574,6 @@ unsafe extern "C" {
     /// Exact C-ABI `bc_map_symmetry` host operation; pointer buffers obey the module safety contract.
     #[link_name = "bc_map_symmetry"]
     pub(crate) fn bc_map_symmetry(out_symmetry: *mut i32) -> i32;
-    /// Exact C-ABI `map_num_camp_groups` host operation; pointer buffers obey the module safety contract.
-    #[link_name = "map_num_camp_groups"]
-    pub(crate) fn map_num_camp_groups(out_count: *mut u32) -> i32;
-    /// Exact C-ABI `map_camp_groups` host operation; pointer buffers obey the module safety contract.
-    #[link_name = "map_camp_groups"]
-    pub(crate) fn map_camp_groups(groups: *mut u32, capacity: u32, out_count: *mut u32) -> i32;
     /// Exact C-ABI `map_camp_group_num_camps` host operation; pointer buffers obey the module safety contract.
     #[link_name = "map_camp_group_num_camps"]
     pub(crate) fn map_camp_group_num_camps(group: u32, out_count: *mut u32) -> i32;
@@ -552,6 +591,15 @@ unsafe extern "C" {
     /// Exact C-ABI `map_camp_info` host operation; pointer buffers obey the module safety contract.
     #[link_name = "map_camp_info"]
     pub(crate) fn map_camp_info(camp: u32, out_info: *mut CampInfo) -> i32;
+    /// Exact C-ABI `map_camp_layout` host operation; pointer buffers obey the module safety contract.
+    #[link_name = "map_camp_layout"]
+    pub(crate) fn map_camp_layout(out_words: *mut u32, capacity: u32, out_count: *mut u32) -> i32;
+    /// Exact C-ABI `map_camp_group_of` host operation; pointer buffers obey the module safety contract.
+    #[link_name = "map_camp_group_of"]
+    pub(crate) fn map_camp_group_of(camp: u32, out_group: *mut u32) -> i32;
+    /// Exact C-ABI `map_camp_at` host operation; pointer buffers obey the module safety contract.
+    #[link_name = "map_camp_at"]
+    pub(crate) fn map_camp_at(x: i32, y: i32, out_camp: *mut u32) -> i32;
     /// Exact C-ABI `camp_group_cooldown` host operation; pointer buffers obey the module safety contract.
     #[link_name = "camp_group_cooldown"]
     pub(crate) fn camp_group_cooldown(group: u32, out_cooldown: *mut i32) -> i32;
@@ -572,6 +620,9 @@ unsafe extern "C" {
     /// Exact C-ABI `camp` host operation; pointer buffers obey the module safety contract.
     #[link_name = "camp"]
     pub(crate) fn camp(camp: u32, out_state: *mut CampState) -> i32;
+    /// Query the individual camp lifecycle state through its current perspective.
+    #[link_name = "camp_state"]
+    pub(crate) fn camp_state(camp: u32, out_state: *mut u32) -> i32;
     /// Exact C-ABI `camp_design` host operation; pointer buffers obey the module safety contract.
     #[link_name = "camp_design"]
     pub(crate) fn camp_design(kind: i32, out_design: *mut CampDesign) -> i32;
@@ -581,6 +632,9 @@ unsafe extern "C" {
     /// Exact C-ABI `champion_at` host operation; pointer buffers obey the module safety contract.
     #[link_name = "champion_at"]
     pub(crate) fn champion_at(x: i32, y: i32, out_handle: *mut u32) -> i32;
+    /// Query one tile in the authenticated champion's effective vision.
+    #[link_name = "is_visible"]
+    pub(crate) fn is_visible(x: i32, y: i32, out_visible: *mut i32) -> i32;
     /// Exact C-ABI `has_camp` host operation; pointer buffers obey the module safety contract.
     #[link_name = "has_camp"]
     pub(crate) fn has_camp(x: i32, y: i32, out_present: *mut i32) -> i32;
@@ -1022,6 +1076,16 @@ pub(crate) unsafe fn enemy_occupancy(out_board: *mut u64) -> i32 {
 pub(crate) unsafe fn camp_occupancy(out_board: *mut u64) -> i32 {
     crate::fake::call("board_camp_occupancy", &[out_board as usize]) as i32
 }
+/// Exact C-ABI `awake_camp_occupancy` host operation; pointer buffers obey the module safety contract.
+#[cfg(test)]
+pub(crate) unsafe fn awake_camp_occupancy(out_board: *mut u64) -> i32 {
+    crate::fake::call("board_awake_camp_occupancy", &[out_board as usize]) as i32
+}
+/// Exact C-ABI `asleep_camp_occupancy` host operation; pointer buffers obey the module safety contract.
+#[cfg(test)]
+pub(crate) unsafe fn asleep_camp_occupancy(out_board: *mut u64) -> i32 {
+    crate::fake::call("board_asleep_camp_occupancy", &[out_board as usize]) as i32
+}
 /// Exact C-ABI `ally_ward_occupancy` host operation; pointer buffers obey the module safety contract.
 #[cfg(test)]
 pub(crate) unsafe fn ally_ward_occupancy(out_board: *mut u64) -> i32 {
@@ -1082,6 +1146,11 @@ pub(crate) unsafe fn teleports(
         "teleports",
         &[teleports as usize, capacity as usize, out_count as usize],
     ) as i32
+}
+/// Exact C-ABI `teleport_at` host operation; pointer buffers obey the module safety contract.
+#[cfg(test)]
+pub(crate) unsafe fn teleport_at(x: i32, y: i32, out_teleport: *mut TeleportInfo) -> i32 {
+    crate::fake::call("teleport_at", &[x as usize, y as usize, out_teleport as usize]) as i32
 }
 /// Exact C-ABI `ward_vision` host operation; pointer buffers obey the module safety contract.
 #[cfg(test)]
@@ -1256,6 +1325,14 @@ pub(crate) unsafe fn write_shared_memory(
 pub(crate) unsafe fn champion(champion: u32, out_info: *mut ChampionInfo) -> i32 {
     crate::fake::call("champion", &[champion as usize, out_info as usize]) as i32
 }
+/// Exact C-ABI `champion_identity` host operation; pointer buffers obey the module safety contract.
+#[cfg(test)]
+pub(crate) unsafe fn champion_identity(champion: u32, out_identity: *mut ChampionIdentity) -> i32 {
+    crate::fake::call(
+        "champion_identity",
+        &[champion as usize, out_identity as usize],
+    ) as i32
+}
 /// Exact C-ABI `champion_design` host operation; pointer buffers obey the module safety contract.
 #[cfg(test)]
 pub(crate) unsafe fn champion_design(kind: i32, out_design: *mut ChampionDesign) -> i32 {
@@ -1420,19 +1497,6 @@ pub(crate) unsafe fn bc_map_mask(feature: i32, out_board: *mut u64) -> i32 {
 pub(crate) unsafe fn bc_map_symmetry(out_symmetry: *mut i32) -> i32 {
     crate::fake::call("bc_map_symmetry", &[out_symmetry as usize]) as i32
 }
-/// Exact C-ABI `map_num_camp_groups` host operation; pointer buffers obey the module safety contract.
-#[cfg(test)]
-pub(crate) unsafe fn map_num_camp_groups(out_count: *mut u32) -> i32 {
-    crate::fake::call("map_num_camp_groups", &[out_count as usize]) as i32
-}
-/// Exact C-ABI `map_camp_groups` host operation; pointer buffers obey the module safety contract.
-#[cfg(test)]
-pub(crate) unsafe fn map_camp_groups(groups: *mut u32, capacity: u32, out_count: *mut u32) -> i32 {
-    crate::fake::call(
-        "map_camp_groups",
-        &[groups as usize, capacity as usize, out_count as usize],
-    ) as i32
-}
 /// Exact C-ABI `map_camp_group_num_camps` host operation; pointer buffers obey the module safety contract.
 #[cfg(test)]
 pub(crate) unsafe fn map_camp_group_num_camps(group: u32, out_count: *mut u32) -> i32 {
@@ -1468,6 +1532,21 @@ pub(crate) unsafe fn map_camp_group(group: u32, out_info: *mut CampGroupInfo) ->
 #[cfg(test)]
 pub(crate) unsafe fn map_camp_info(camp: u32, out_info: *mut CampInfo) -> i32 {
     crate::fake::call("map_camp_info", &[camp as usize, out_info as usize]) as i32
+}
+/// Exact C-ABI `map_camp_layout` host operation; pointer buffers obey the module safety contract.
+#[cfg(test)]
+pub(crate) unsafe fn map_camp_layout(out_words: *mut u32, capacity: u32, out_count: *mut u32) -> i32 {
+    crate::fake::call("map_camp_layout", &[out_words as usize, capacity as usize, out_count as usize]) as i32
+}
+/// Exact C-ABI `map_camp_group_of` host operation; pointer buffers obey the module safety contract.
+#[cfg(test)]
+pub(crate) unsafe fn map_camp_group_of(camp: u32, out_group: *mut u32) -> i32 {
+    crate::fake::call("map_camp_group_of", &[camp as usize, out_group as usize]) as i32
+}
+/// Exact C-ABI `map_camp_at` host operation; pointer buffers obey the module safety contract.
+#[cfg(test)]
+pub(crate) unsafe fn map_camp_at(x: i32, y: i32, out_camp: *mut u32) -> i32 {
+    crate::fake::call("map_camp_at", &[x as usize, y as usize, out_camp as usize]) as i32
 }
 /// Exact C-ABI `camp_group_cooldown` host operation; pointer buffers obey the module safety contract.
 #[cfg(test)]
@@ -1513,6 +1592,11 @@ pub(crate) unsafe fn bc_camp_group_max_respawn(group: u32, out_timer: *mut i32) 
 pub(crate) unsafe fn camp(camp: u32, out_state: *mut CampState) -> i32 {
     crate::fake::call("camp", &[camp as usize, out_state as usize]) as i32
 }
+/// Query the individual camp lifecycle state through the fake host.
+#[cfg(test)]
+pub(crate) unsafe fn camp_state(camp: u32, out_state: *mut u32) -> i32 {
+    crate::fake::call("camp_state", &[camp as usize, out_state as usize]) as i32
+}
 /// Exact C-ABI `camp_design` host operation; pointer buffers obey the module safety contract.
 #[cfg(test)]
 pub(crate) unsafe fn camp_design(kind: i32, out_design: *mut CampDesign) -> i32 {
@@ -1530,6 +1614,11 @@ pub(crate) unsafe fn champion_at(x: i32, y: i32, out_handle: *mut u32) -> i32 {
         "champion_at",
         &[x as usize, y as usize, out_handle as usize],
     ) as i32
+}
+/// Test host equivalent of the scalar visibility query.
+#[cfg(test)]
+pub(crate) unsafe fn is_visible(x: i32, y: i32, out_visible: *mut i32) -> i32 {
+    crate::fake::call("is_visible", &[x as usize, y as usize, out_visible as usize]) as i32
 }
 /// Exact C-ABI `has_camp` host operation; pointer buffers obey the module safety contract.
 #[cfg(test)]
