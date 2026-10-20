@@ -569,20 +569,34 @@ def main():
     ap.add_argument("dumps", nargs="+")
     ap.add_argument("-o", "--out", default=os.path.join(ROOT, "data", "replay_modes.npz"))
     ap.add_argument("--check", help="nnlog text of the same game for a feature comparison")
+    ap.add_argument("--index", help="fetch_replays.py index.json: adds each side's ladder rating and result")
     args = ap.parse_args()
-    parts = []
+    index = json.load(open(args.index, encoding="utf-8")) if args.index else {}
+    parts, side_info = [], []
     for p in args.dumps:
         out = process(p, args.check)
         if out is not None:
             parts.append(out)
-            print(f"{os.path.basename(p)}: {len(out['X'])} rows")
+            match_id = os.path.basename(p).split(".")[0]
+            entry = index.get(match_id, {})
+            by_side = {t.get("side"): t for t in entry.get("teams", [])}
+            info = []
+            for side in ("a", "b"):
+                t = by_side.get(side, {})
+                info.append((float(t.get("rating") or 0.0), 1.0 if t.get("result") == "win" else 0.0))
+            side_info.append(info)
+            print(f"{os.path.basename(p)}: {len(out['X'])} rows" + (f" ({' vs '.join(t.get('name', '?') for t in entry.get('teams', []))})" if entry else ""))
     if parts and not args.check:
         X = np.concatenate([p["X"] for p in parts]); mask = np.concatenate([p["mask"] for p in parts])
         y = np.concatenate([p["y"] for p in parts]); reward = np.concatenate([p["reward"] for p in parts])
         meta = np.concatenate([p["meta"] for p in parts])
         match_id = np.concatenate([np.full(len(p["X"]), i, dtype=np.int32) for i, p in enumerate(parts)])
-        np.savez_compressed(args.out, X=X, mask=mask, y=y, reward=reward, meta=meta, match_id=match_id,
+        rating = np.concatenate([np.array([side_info[i][int(team)][0] for team in p["meta"][:, 6]], dtype=np.float32) for i, p in enumerate(parts)])
+        won = np.concatenate([np.array([side_info[i][int(team)][1] for team in p["meta"][:, 6]], dtype=np.float32) for i, p in enumerate(parts)])
+        np.savez_compressed(args.out, X=X, mask=mask, y=y, reward=reward, meta=meta, match_id=match_id, rating=rating, won=won,
                             scores=np.zeros((len(X), config.N_MODES), dtype=np.float32))
+        if args.index:
+            print("rows from winning sides: %d%%, mean rating %.0f" % (100 * won.mean(), rating[rating > 0].mean() if (rating > 0).any() else 0))
         print(f"{len(X)} rows -> {args.out}; modes:", {config.MODE_NAMES[i]: int(c) for i, c in enumerate(np.bincount(y, minlength=config.N_MODES))})
 
 

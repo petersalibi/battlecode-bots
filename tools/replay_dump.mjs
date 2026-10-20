@@ -218,13 +218,31 @@ function compactState(st, team, champion, see) {
 
 let spawnB = null, current = null, turns = 0;
 function flush() { if (current) { out.write(JSON.stringify(current) + "\n"); turns++; current = null; } }
+const SEEK = flags.includes("--seek");
 const t0 = Date.now();
-for (let p = 0; p < size; p++) {
-  // One seek per input: ReplayNext advances by engine step, not by input.
-  check(E.Game_Visualiser_Timeline_Seek(game, timeline, p, 0));
-  const ts = timelineState();
+// Walk the timeline one engine step at a time. A seek re-simulates from a checkpoint, so seeking
+// to every input costs O(inputs^2) (about 7 minutes a game); stepping is linear (about a second).
+// Each input position has exactly one state that awaits it (the engine's follow-up steps after
+// an input are not awaiting states), and a seek to p lands on that same state, so handling the
+// awaiting states as they are reached reproduces the seek-based dump. The perspective snapshot
+// and vision are read from the live engine, so they must be taken at that moment, never after a
+// look-ahead step.
+check(E.Game_Visualiser_Timeline_Seek(game, timeline, 0, 0));
+let ts = timelineState();
+let p = 0;
+for (let steps = 0; ; steps++) {
+  if (SEEK) {
+    if (p >= size) break;
+    check(E.Game_Visualiser_Timeline_Seek(game, timeline, p, 0));
+    ts = timelineState();
+  } else if (steps > 0) {
+    if (E.Game_Visualiser_Timeline_ReplayNext(game, 1) !== 0) break;
+    ts = timelineState();
+    if (!ts.awaitingInput) continue;
+  }
+  p = ts.inputPosition;
   if (PROBE && p < 36) console.error(`probe: p=${p} round=${ts.round} phase=${ts.phase} team=${ts.team} champ=${ts.currentChampion} await=${ts.awaitingInput} step=${ts.step.kind}/${ts.step.phase} actor=${ts.step.actor.kind}:${ts.step.actor.index}`);
-  if (ts.phase === 12) continue;                                   // draft
+  if (ts.phase === 12) { if (SEEK) p++; continue; }                // draft
   if (!spawnB && ts.round >= 1) { const b = ts.champions.filter(c => c.team === 1 && c.position); if (b.length) spawnB = b.map(c => [c.position.x, c.position.y]); }
   const step = ts.step;
   if (ts.awaitingInput && (!current || current.team !== ts.team || current.champ !== ts.currentChampion || current.round !== ts.round)) {
@@ -245,6 +263,7 @@ for (let p = 0; p < size; p++) {
     if (step.abilityType !== undefined) a.ab = step.abilityType;
     current.actions.push(a);
   }
+  if (SEEK) p++;
   if (PROBE && p > 400) break;
 }
 flush();

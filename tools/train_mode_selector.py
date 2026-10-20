@@ -206,10 +206,20 @@ def main():
     ap.add_argument("--margin", type=float, default=0.5, help="logit gap below which the script decides")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--no-export", action="store_true")
+    ap.add_argument("--winners", action="store_true", help="replay data: weight the winning/higher-rated side up")
+    ap.add_argument("--loser-weight", type=float, default=0.3)
     args = ap.parse_args()
 
     X, mask, y, reward, test = load(args.data, args.holdout)
     w = advantage_weights(reward, y, args.beta, args.clip)
+    d = np.load(args.data)
+    if args.winners and "won" in d:
+        # Replay data: learn mostly from the side that won (and from the higher-rated side).
+        won = d["won"]; rating = d["rating"]
+        side = np.where(won > 0, 1.0, args.loser_weight).astype(np.float32)
+        if (rating > 0).any():
+            side *= np.clip(rating / max(rating.max(), 1.0), 0.5, 1.0)
+        w = (w * side).astype(np.float32)
     print(f"{len(X)} rows, {X.shape[1]} features, {int(test.sum())} held out; weights mean {w.mean():.2f}")
     net = train(X, mask, y, w, test, args.epochs, args.lr, args.batch, args.seed)
 
