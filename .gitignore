@@ -1,6 +1,23 @@
+# Local toolchain
+.venv/
+
+# cambc build output and submission bundles
 .cambc/
 bots/*/.cambc/
-matches/
-replays/
 bots/*/build/
 bots/*/target/
+bots/*/src.zip
+
+# Match output
+matches/
+replays/
+
+# Python
+__pycache__/
+*.pyc
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
