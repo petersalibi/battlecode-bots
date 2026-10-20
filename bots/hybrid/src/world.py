@@ -31,7 +31,8 @@ _camp_stats = {}          # camp kind -> CampStats, filled on the first turn
 class Group:
     __slots__ = ("index", "group", "handle", "gems", "gold", "respawn", "tiles", "tile_list", "camp_handles",
                  "n_camps", "total_health", "total_strength", "harmless", "state", "timer", "seen_round",
-                 "respawn_round", "value", "near", "kinds", "reachable", "avoid_until", "anchor")
+                 "respawn_round", "value", "near", "kinds", "reachable", "avoid_until", "anchor",
+                 "attack_range")
 
     def __init__(self, index, group):
         self.index = index
@@ -47,6 +48,7 @@ class Group:
         self.camp_handles = [int(c) for c in camps]
         self.total_health = 0.0
         self.total_strength = 0.0
+        self.attack_range = 3                    # the longest reach among the group's monsters
         self.kinds = []
         for camp in camps:
             kind = camp._type                    # Camp.kind() builds an enum each call; the raw int is free
@@ -55,6 +57,9 @@ class Group:
                 stats = _camp_stats[kind] = camp.base_stats()
             self.total_health += stats.base_health
             self.total_strength += stats.base_strength
+            reach = int(getattr(stats, "base_attack_range", 3) or 3)
+            if reach > self.attack_range:
+                self.attack_range = reach
             self.kinds.append(kind)
         self.harmless = self.total_strength == 0
         self.near = None          # built by World.finish_init on the second turn
@@ -154,6 +159,7 @@ class World:
         me = cambc.me()
         self.me = me
         self.handle = int(me)
+        self.pos = me.position()               # refresh() updates it; finish_init may run first
         self.width = game_map.width()
         self.height = game_map.height()
         self.walls = game_map.walls()
@@ -186,24 +192,13 @@ class World:
         self.static_blocked = self.terrain_blocked | camp_tiles
         marks.append(_cambc.fuel_remaining())
 
-        # Tiles from which an altar can be tributed at.
-        goals = Bitboard()
-        ring = Bitboard()
-        for altar in self.altars:
-            ring.clear()
-            ring.draw_chebyshev(altar, self.submit_range)
-            goals |= ring
-        goals &= ~self.static_blocked
-        self.altar_goals = goals
-
-        # Static distance fields: turns to the nearest altar approach tile and to our spawn. The
-        # terrain-only spawn field serves the first turn's target choice, before anchors exist.
-        self.altar_field = DistanceField()
-        self.altar_field.compute(self.static_blocked, goals, Bitboard())
+        # Static distance field to our spawn. A 100x100 field costs ~750K, and the first turn's
+        # budget (about 4.5M after startup) is already mostly spent on the camp groups on big maps,
+        # so the altar field and the per-group anchors are built by finish_init from leftover fuel.
         self.spawn_field = DistanceField()
         self.spawn_field.compute(self.static_blocked, self.spawn_ally, Bitboard())
-        self.spawn_field_terrain = DistanceField()
-        self.spawn_field_terrain.compute(self.terrain_blocked, self.spawn_ally, Bitboard())
+        self.altar_field = None
+        self.altar_goals = None
         self._enemy_spawn_field = None       # built on first use (features only)
         self.group_of_camp = {}
         self.camp_at_tile = {}                   # (x, y) -> (Camp, group index); filled by finish_init
@@ -212,10 +207,9 @@ class World:
                 self.group_of_camp[handle] = g.index
         self.near_ready = False
         if config.LOG_GROUPS:
-            spawn_get = self.spawn_field_terrain.get
-            rows = ["g%d k%s at %d,%d gems=%d gold=%d hp=%d str=%d d=%d" % (
+            rows = ["g%d k%s at %d,%d gems=%d gold=%d hp=%d str=%d" % (
                 g.index, g.kinds, g.tile_list[0].x, g.tile_list[0].y, g.gems, g.gold, int(g.total_health),
-                int(g.total_strength), spawn_get(g.tile_list[0]))
+                int(g.total_strength))
                 for g in self.groups]
             print("groups:\n  " + "\n  ".join(rows), flush=True)
 
@@ -262,6 +256,22 @@ class World:
     def finish_init(self):
         """Setup that did not fit in the first turn's budget, run at the end of each turn on leftover
         fuel until every group has its anchor (stops early when fuel runs short, resumes next turn)."""
+        if self.altar_field is None:
+            if _fuel() < config.FINISH_INIT_RESERVE + config.FIELD_COST_PER_TILE * self.width * self.height:
+                return
+            # Tiles from which an altar can be tributed at, and the field of turns to the nearest.
+            goals = Bitboard()
+            ring = Bitboard()
+            for altar in self.altars:
+                ring.clear()
+                ring.draw_chebyshev(altar, self.submit_range)
+                goals |= ring
+            goals &= ~self.static_blocked
+            self.altar_goals = goals
+            field = DistanceField()
+            field.compute(self.static_blocked, goals, Bitboard())
+            self.altar_field = field
+            self.turns_to_altar = field.get(self.pos)
         spawn_get = self.spawn_field.get
         ring = Bitboard()
         tmp = Bitboard()
@@ -302,13 +312,15 @@ class World:
                  if slot != self.slot and group_index >= 0}
         budget = self.max_hp * (1 - config.HEALTH_RESERVE)
         best, best_d = None, UNREACHABLE
-        get = self.spawn_field_terrain.get        # camps passable: anchors do not exist yet
+        here = self.pos
         for g in self.groups:
             if g.gems <= 0 or g.index in taken:
                 continue
             if not g.harmless and g.total_strength * (int(g.total_health / self.dps) + 1) >= budget:
                 continue
-            d = get(g.tile_list[0])
+            # Straight-line distance: anchors and fields are not built yet, and the regular camp
+            # ranking takes over within RETARGET_EVERY rounds.
+            d = here.chebyshev_distance(g.tile_list[0])
             if d < best_d:
                 best, best_d = g, d
         return best
@@ -361,7 +373,7 @@ class World:
                                         | ChampionState.TELEPORTING))
         self.at_spawn = self.spawn_ally.is_set(self.pos)
         self.in_bush = self.bushes.is_set(self.pos)
-        self.turns_to_altar = self.altar_field.get(self.pos)
+        self.turns_to_altar = self.altar_field.get(self.pos) if self.altar_field is not None else UNREACHABLE
         self.turns_to_spawn = self.spawn_field.get(self.pos)
 
         # Stats change only after shopping, which happens on spawn or while dead.
@@ -537,7 +549,8 @@ class World:
         self.capture_rounds_left = max(0, config.CAPTURE_TURNS - decider.mode_turns) if decider.mode == config.CAPTURE else 0
         incoming = 0.0
         for camp, gi, pos, hp in self.visible_camps:
-            if hp > 0 and pos.chebyshev_distance(self.pos) <= 3:
+            # Camps reach 3 (wolf), 4 (elk, golem) or 5 (monolith) tiles since the week 2 patch.
+            if hp > 0 and pos.chebyshev_distance(self.pos) <= self.groups[gi].attack_range:
                 g = self.groups[gi]
                 incoming += g.total_strength / max(g.n_camps, 1)
         self.camp_damage_incoming = incoming

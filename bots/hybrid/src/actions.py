@@ -330,14 +330,16 @@ class Actions:
                 self._cast_shield()
             self._heal_ally()
             return
-        # Close the distance. Ranged champions stop at their attack range.
+        # Close the distance. Ranged champions stop at their attack range. The target moves, so this
+        # is a small uncached field around it rather than a whole-map field per position.
+        goals = Bitboard()
         if w.is_ranged:
-            goals = self.nav.ring(("enemy", target.handle, target.pos.x, target.pos.y), [target.pos], w.attack_range)
-            field = self.nav.field_to(("enemy", target.handle, target.pos.x, target.pos.y), goals)
+            goals.draw_chebyshev(target.pos, w.attack_range)
+            goals &= ~w.static_blocked
+            goals.set(target.pos, False)
         else:
-            goals = Bitboard()
             goals.set(target.pos)
-            field = self.nav.field_to(("enemy", target.handle, target.pos.x, target.pos.y), goals)
+        field = self.nav.local_field(goals, config.FIGHT_RANGE * 2 + 2)
         self.nav.step_along(field)
         self.nav.try_dash(field)
         if w.pos.chebyshev_distance(target.pos) <= w.attack_range:

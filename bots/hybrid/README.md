@@ -92,16 +92,25 @@ size, an aggression byte and the per-body shard stat.
 Shared memory: one claim byte per body (2-bit status, 6-bit group index), byte 6 the last round an
 enemy was seen. Draft memory: `HY1` magic, team size, aggression, map class, per-body shard stat.
 
-## Fuel (release builds, 2026-10-19)
+## Fuel (release builds, cambc 3.0.1 / engine 1.0.0, 2026-10-20)
 
-| | corners (30 groups) | lanes (42 groups) |
+The first champion turn has about 4.5M after startup. `game_map.camp_groups()` plus building a
+`Group` per group costs 2.3M on big-world (24 groups, 100x100) and 3.1M on islands (46 groups),
+and a whole-map `DistanceField` costs about 80 fuel per tile (750K at 100x100). So the first
+turn builds only the spawn field; the altar field and the per-group anchors come from leftover
+fuel at the end of later turns (`finish_init`), per-altar fields are built one per turn when
+`FIELD_BUILD_RESERVE` allows, and fight pathing uses small uncached local fields. If setup itself
+runs out, the turn is suspended into round 2 and the `init:` line prints misleading numbers, so
+check the `exh` column of the harness, not the log.
+
+| | 00lanes (42 groups, 90x30) | 01big-world (24 groups, 100x100) |
 |---|---|---|
-| First turn, total | 3.9M of 4.55M | 4.0M of 4.56M |
-| Normal turn, average | 0.7M | 0.85M |
-| Worst normal turn seen | 1.6M | 1.9M |
+| First turn, setup | 3.5M | 4.1M |
+| Normal turn, average | 0.85M | 1.0M |
+| Worst normal turn seen | 2.1M | 2.4M |
 
-The worst turns are camp re-rankings with enemies in sight. `vision.camps()` is never called: it
-rebuilds every camp group object on each call. Visible camps go through a static tile table.
+The worst turns are camp re-rankings (the from-me field plus one read per group) with enemies in
+sight. `vision.camps()` is never called: it rebuilds every camp group object on each call.
 
 ## Results so far (release)
 
@@ -127,12 +136,30 @@ recovered from downloaded ladder replays, which embed the map verbatim after a 1
 length was found by binary search on the engine's parse errors (6 = truncated, 7 = trailing bytes).
 All 17 platform maps run without errors for 300+ rounds.
 
+## Week 2 patch (engine 1.0.0, 2026-10-20)
+
+The rules changed under us: wolves pay 4 gems and 40 gold (were 22 and 90), elks 15 and 90, gem
+clusters 7, kills pay 100 gold, elks and golems reach 4 tiles and monoliths 5, wards recharge over
+10 turns, altar locks take 5 hits, there is a Golem camp (5,000 health, 120 strength) and a
+twelfth champion, Heart of Ruin. Games now run 1,100 to 2,000 rounds at roughly 40 to 70 gems per
+100 rounds, and a side dies about 10 to 15 times a game. The bot reads camp values and ranges
+from the SDK, so the amendments were to the tuning: `TRIBUTE_BAG` 45 to 24, `GOLD_VALUE` 0.15 to
+0.1, the draft order and build tables (Heart of Ruin, Marcella up), the altar chosen by walking
+distance (the straight-line choice sent whole teams to an unreachable altar on islands), and the
+fuel budgeting above. Sweep against the v1 tag on the 21-map pool: 31-11.
+
 ## Known gaps
 
-- **Contest and stampede yield no gems.** Their only gem sources are monoliths (20,000 health,
-  200 damage a turn) or a twelve-camp elk block (17,400 health, 360 damage). No plan with our five
-  bodies survives them, so the scorer gives them zero and the team farms gold, which wins the gold
-  tiebreak but nothing else. Taking them needs an equipped team and a rotation plan.
+- **Deaths.** About 14 per side per game on the new engine; each costs 60 rounds and the bag,
+  and hands the killer 100 gold. The fight and flee thresholds in `config.py` predate the patch.
+- **Crowding stalls.** `stuck` fires 20 to 50 times a game on concentrated-wealth and boss-battle:
+  several bodies converge on one camp block with one free approach tile. The guard releases them,
+  but a helper cap based on the block's free ring would avoid the wait.
+- **Contest, boss-battle, gold-rush and elk-arena bank little or nothing.** Their gem sources are
+  monoliths, golems or elk blocks that the scorer refuses for a solo body and the cooperative plan
+  rarely triggers. Taking them needs an equipped team and a rotation plan.
+- **Hooks and corridors from side B** bank under 250 gems while losing 20 to 40 bodies: the team
+  fights at a disadvantage instead of farming elsewhere.
 - Elks and wolf packs are only taken when the cooperative plan triggers; a body that waits 25 turns
   for allies gives up on that group for 60 rounds.
 - Wards are only dropped during captures. Altar locks and teleport crystals are never bought or used.

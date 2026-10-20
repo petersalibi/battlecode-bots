@@ -54,7 +54,7 @@ def _body_stats(picks):
 
 def play():
     chosen = cambc.draft.current_draft(Team.ALLY)
-    available = [pick for pick in range(11) if pick not in chosen]
+    available = [pick for pick in range(config.N_DRAFT_PICKS) if pick not in chosen]
     if not available:
         return
     small_map = _map_is_small()

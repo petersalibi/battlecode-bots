@@ -7,6 +7,7 @@ import cambc
 from cambc import vision
 
 import config
+import fuel
 import memory_codec
 import world as W
 
@@ -138,19 +139,32 @@ class Turn:
             except Exception:
                 pass
             best = None
-            if not locked:
-                # The static field already gives the nearest altar's distance; find which one.
-                turns = w.turns_to_altar
-                if turns != W.UNREACHABLE:
-                    altar = min(w.altars, key=lambda a: a.chebyshev_distance(w.pos))
-                    best = (altar, turns)
+            if not locked and w.turns_to_altar == W.UNREACHABLE:
+                pass                                          # no altar can be walked to from here
+            elif not locked and len(w.altars) == 1:
+                best = (w.altars[0], w.turns_to_altar)
             else:
-                field = self.nav.from_me()
+                # Nearest altar by walking distance, never by straight-line distance: on islands the
+                # closest altar as the crow flies can be on another island, and a body sent there
+                # stands still for the rest of the game. One cached field per altar, one read each.
+                # A field costs up to ~750K to build, so at most what fuel allows per turn; an altar
+                # whose field is not built yet is simply not offered this turn.
                 best_turns = W.UNREACHABLE
+                field_cost = config.FIELD_COST_PER_TILE * w.width * w.height
+                built = False
                 for altar in w.altars:
                     if (altar.x, altar.y) in locked:
                         continue
-                    turns = min((field.get(t) for t in self._around(altar)), default=W.UNREACHABLE)
+                    key = ("altar", altar.x, altar.y)
+                    field = self.nav.fields.get(key)
+                    if field is None:
+                        # One new field per turn at most (lanes has six altars), and only with
+                        # enough left for the rest of the turn.
+                        if built or not fuel.can_afford(field_cost, config.FIELD_BUILD_RESERVE):
+                            continue
+                        field = self.nav.field_to(key, self.nav.ring(key, [altar], w.submit_range))
+                        built = True
+                    turns = field.get(w.pos)
                     if turns < best_turns:
                         best, best_turns = (altar, turns), turns
             self._altar = best if best is not None else False

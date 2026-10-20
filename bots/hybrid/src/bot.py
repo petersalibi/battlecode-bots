@@ -37,6 +37,7 @@ class Bot:
                 # A huge map: acting now would suspend the turn into the next round. Standing still
                 # for one round is cheaper, and the next turn takes the cheap first-turn path.
                 print("init: skipping the first turn's actions, %d fuel left" % fuel.remaining(), flush=True)
+                w.finish_init()
                 return
         w.refresh()
         self.nav.turn_reset()

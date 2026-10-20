@@ -83,15 +83,15 @@ class AbilityDamage: max_cooldown: int; valid_targets: Any; exclusive_with_movem
 ### AbilityDash
 
 ```python
-class AbilityDash: max_cooldown: int; valid_targets: Any; exclusive_with_movement: bool; range: float
+class AbilityDash: max_cooldown: int; valid_targets: Any; exclusive_with_movement: bool; range: Maximum dash travel distance in tiles. Diagonal steps count as one;; radius: Chebyshev radius in tiles around the landing tile for damage and stun;; modifier: Landing damage multiplier: base damage; duration: Stun duration applied on landing, in turns; 0 disables stun.; range: float; radius: float; modifier: float; duration: int
 ```
 
-
+Dash metadata. Landing effects apply to enemies and camps only after a successful dash. range: Maximum dash travel distance in tiles. Diagonal steps count as one; the destination must be a different tile reachable by a legal dash path. radius: Chebyshev radius in tiles around the landing tile for damage and stun; 1 includes all eight neighbouring tiles. modifier: Landing damage multiplier: base damage = caster Focus * modifier, before damage bonuses and mitigation. 0 disables landing damage. duration: Stun duration applied on landing, in turns; 0 disables stun. This is not the dash travel time.
 
 Public SDK type declaration.
 
 ```python
-class AbilityDash: max_cooldown: int; valid_targets: Any; exclusive_with_movement: bool; range: float
+class AbilityDash: max_cooldown: int; valid_targets: Any; exclusive_with_movement: bool; range: Maximum dash travel distance in tiles. Diagonal steps count as one;; radius: Chebyshev radius in tiles around the landing tile for damage and stun;; modifier: Landing damage multiplier: base damage; duration: Stun duration applied on landing, in turns; 0 disables stun.; range: float; radius: float; modifier: float; duration: int
 ```
 
 ### AbilityHeal
@@ -335,7 +335,7 @@ class CampStats: vision_radius: float; base_move_speed: int; base_attack_range: 
 ### CampType
 
 ```python
-class CampType(IntEnum): WOLF = 0; ELK = 1; GEM_CLUSTER = 2; GOLD_CLUSTER = 3; MONOLITH = 4
+class CampType(IntEnum): WOLF = 0; ELK = 1; GEM_CLUSTER = 2; GOLD_CLUSTER = 3; MONOLITH = 4; GOLEM = 5
 ```
 
 Neutral camp type.
@@ -343,7 +343,7 @@ Neutral camp type.
 Public SDK type declaration.
 
 ```python
-class CampType(IntEnum): WOLF = 0; ELK = 1; GEM_CLUSTER = 2; GOLD_CLUSTER = 3; MONOLITH = 4
+class CampType(IntEnum): WOLF = 0; ELK = 1; GEM_CLUSTER = 2; GOLD_CLUSTER = 3; MONOLITH = 4; GOLEM = 5
 ```
 
 ### Champion
@@ -363,7 +363,7 @@ class Champion(Unit): ...
 ### ChampionDraft
 
 ```python
-class ChampionDraft(IntEnum): RYTH = 0; VESPER_VALE = 1; VENDETTA = 2; CASSI_AND_ISSAC = 3; STELLAR = 4; PRISM = 5; MARCELLA = 6; WILLOW = 7; REN = 8; VARG = 9; TAVI = 10
+class ChampionDraft(IntEnum): RYTH = 0; VESPER_VALE = 1; VENDETTA = 2; CASSI_AND_ISSAC = 3; STELLAR = 4; PRISM = 5; MARCELLA = 6; WILLOW = 7; REN = 8; VARG = 9; TAVI = 10; HEART_OF_RUIN = 11
 ```
 
 Draft pick.
@@ -371,7 +371,7 @@ Draft pick.
 Public SDK type declaration.
 
 ```python
-class ChampionDraft(IntEnum): RYTH = 0; VESPER_VALE = 1; VENDETTA = 2; CASSI_AND_ISSAC = 3; STELLAR = 4; PRISM = 5; MARCELLA = 6; WILLOW = 7; REN = 8; VARG = 9; TAVI = 10
+class ChampionDraft(IntEnum): RYTH = 0; VESPER_VALE = 1; VENDETTA = 2; CASSI_AND_ISSAC = 3; STELLAR = 4; PRISM = 5; MARCELLA = 6; WILLOW = 7; REN = 8; VARG = 9; TAVI = 10; HEART_OF_RUIN = 11
 ```
 
 ### champions
@@ -424,7 +424,7 @@ class ChampionStats: vision_radius: float; base_move_speed: int; base_attack_ran
 ### ChampionType
 
 ```python
-class ChampionType(IntEnum): RYTH = 0; VESPER_VALE = 1; VENDETTA = 2; CASSI = 3; ISSAC = 4; STELLAR = 5; PRISM = 6; MARCELLA = 7; WILLOW = 8; REN = 9; VARG = 10; TAVI = 11
+class ChampionType(IntEnum): RYTH = 0; VESPER_VALE = 1; VENDETTA = 2; CASSI = 3; ISSAC = 4; STELLAR = 5; PRISM = 6; MARCELLA = 7; WILLOW = 8; REN = 9; VARG = 10; TAVI = 11; HEART_OF_RUIN = 12
 ```
 
 Playable champion type.
@@ -432,7 +432,7 @@ Playable champion type.
 Public SDK type declaration.
 
 ```python
-class ChampionType(IntEnum): RYTH = 0; VESPER_VALE = 1; VENDETTA = 2; CASSI = 3; ISSAC = 4; STELLAR = 5; PRISM = 6; MARCELLA = 7; WILLOW = 8; REN = 9; VARG = 10; TAVI = 11
+class ChampionType(IntEnum): RYTH = 0; VESPER_VALE = 1; VENDETTA = 2; CASSI = 3; ISSAC = 4; STELLAR = 5; PRISM = 6; MARCELLA = 7; WILLOW = 8; REN = 9; VARG = 10; TAVI = 11; HEART_OF_RUIN = 12
 ```
 
 ### Consumable
@@ -674,7 +674,7 @@ result = bc.me()
 ### PassiveType
 
 ```python
-class PassiveType(IntEnum): NONE = 0; BONUS_GOLD = 1; REMOTE_SHOP = 2; GEM_FOCUS = 3; SPLASH_ATTACK = 4; HEALTH_STRENGTH = 5; RESET_COOLDOWNS_ON_KILL = 6; RETALIATION = 7; STUN_IMMUNITY = 8
+class PassiveType(IntEnum): NONE = 0; BONUS_GOLD = 1; REMOTE_SHOP = 2; GEM_FOCUS = 3; SPLASH_ATTACK = 4; HEALTH_STRENGTH = 5; RESET_COOLDOWNS_ON_KILL = 6; RETALIATION = 7; STUN_IMMUNITY = 8; MISSING_HEALTH_DAMAGE = 10
 ```
 
 Champion passive.
@@ -682,7 +682,7 @@ Champion passive.
 Public SDK type declaration.
 
 ```python
-class PassiveType(IntEnum): NONE = 0; BONUS_GOLD = 1; REMOTE_SHOP = 2; GEM_FOCUS = 3; SPLASH_ATTACK = 4; HEALTH_STRENGTH = 5; RESET_COOLDOWNS_ON_KILL = 6; RETALIATION = 7; STUN_IMMUNITY = 8
+class PassiveType(IntEnum): NONE = 0; BONUS_GOLD = 1; REMOTE_SHOP = 2; GEM_FOCUS = 3; SPLASH_ATTACK = 4; HEALTH_STRENGTH = 5; RESET_COOLDOWNS_ON_KILL = 6; RETALIATION = 7; STUN_IMMUNITY = 8; MISSING_HEALTH_DAMAGE = 10
 ```
 
 ### resign
@@ -957,7 +957,7 @@ result = subject.cooldown()
 def damage_amount(self, target: Optional[Champion] = None) -> float
 ```
 
-Return the damage the ability would deal, after mitigation and shields if a target is given. Args: target: Optional visible champion that would be hit.
+Return Focus-scaled damage, including dash landing damage and caster outgoing bonuses such as Heart of Ruin's passive. Without a target, excludes target-dependent modifiers, shields and health limits. With a target, predict health lost after outgoing bonuses, mitigation and shields, capped at current health. Does not check range or landing area. Args: target: Optional visible champion that would be hit.
 
 **gameplay**: This function can only be used by champion bots and is not usable during draft phase.
 
@@ -3282,6 +3282,23 @@ Inputs:
 is_gold_cluster = subject.is_gold_cluster()
 ```
 
+### is_golem
+
+```python
+def is_golem(self) -> bool
+```
+
+Check whether this camp is a golem.
+
+Evaluate a visible camp before choosing where to farm.
+
+Inputs:
+- subject: bc.Camp (a valid instance)
+
+```python
+is_golem = subject.is_golem()
+```
+
 ### is_monolith
 
 ```python
@@ -4217,11 +4234,11 @@ if me.can_move():
 def move_towards(self, target: Vec2) -> bool
 ```
 
-Move to the reachable tile on a shortest path to target, avoiding walls, holes, altars, the enemy spawn and visible units. Return False without moving when already there, unable to move, or target is blocked or unreachable, and for a newly revealed obstruction. Args: target: Map tile to approach.
+Move to the reachable tile on a shortest path to target. Always treat the target as free for pathfinding, while avoiding other walls, holes, altars, enemy spawn tiles, visible units and teleport reservations. Return False when already there, unable to move, no route exists, or a hidden obstruction is revealed. The engine still validates the chosen landing tile: trying to enter a known blocked target raises Error. Args: target: Map tile to approach.
 
 **gameplay**: This function can only be used by champion bots and is not usable during draft phase.
 
-Take a planned step; false means no movement occurred.
+Path towards a target even when its tile is blocked. Stop at the desired range: the engine still rejects landing on a known blocked tile.
 
 Inputs:
 - destination: a destination selected by your pathfinder
@@ -7710,6 +7727,25 @@ Inputs:
 
 ```python
 has_ward = bc.vision.has_ward(position, team)
+```
+
+### in_vision
+
+```python
+def in_vision(position: Vec2) -> bool
+```
+
+Check current self vision, including owned ward vision, even on empty tiles. Hidden tiles return False; out-of-bounds positions raise Error with API_BAD_POSITION. Args: position: Tile to query.
+
+**gameplay**: This function can only be used by champion bots and is not usable during draft phase.
+
+Check visible objects before choosing a destination.
+
+Inputs:
+- position: Vec2
+
+```python
+result = bc.vision.in_vision(position)
 ```
 
 ### teleport_at

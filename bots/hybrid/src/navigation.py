@@ -52,6 +52,13 @@ class Navigator:
             self.fields[key] = field
         return field
 
+    def local_field(self, goals, max_distance):
+        """Uncached field rooted on goals, explored only max_distance tiles out: for moving targets
+        such as enemies, where a whole-map field per position would cost ~750K on a 100x100 map."""
+        field = DistanceField()
+        field.compute(self.w.static_blocked & ~goals, goals, Bitboard(), max_distance)
+        return field
+
     def from_me(self, max_distance=None):
         """Field of walking turns from our current tile, recomputed at most once per turn (~64K fuel)."""
         if self._from_me is None or self._from_me_round != self.w.round:

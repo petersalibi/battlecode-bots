@@ -21,12 +21,14 @@ SPAWN_LEAVE_HEALTH = 0.95   # stay on spawn until healed to this
 HEALTH_RESERVE = 0.20       # keep this much health in hand after clearing a camp
 
 # ---- Tribute -----------------------------------------------------------------
-TRIBUTE_BAG = 45            # bank once carrying this many gems
-TRIBUTE_BAG_NEAR = 12       # ... or this many when an altar is close
+# Week 2 patch: a wolf pays 4 gems, an elk 15, a gem cluster 7, and a kill pays 100 gold, so
+# bags are small and carriers are hunted. Bank often.
+TRIBUTE_BAG = 24            # bank once carrying this many gems
+TRIBUTE_BAG_NEAR = 8        # ... or this many when an altar is close
 TRIBUTE_NEAR_TURNS = 5      # "close" means within this many walking turns
-TRIBUTE_BAG_HURT = 10       # bank anything above this when health is low
+TRIBUTE_BAG_HURT = 6        # bank anything above this when health is low
 ENDGAME_ROUNDS = 120        # bank everything in the last rounds of the game
-TRIBUTE_SCORE_PER_GEM = 0.02
+TRIBUTE_SCORE_PER_GEM = 0.04
 
 # ---- Shop and recall ----------------------------------------------------------
 SHARD_COST = 30
@@ -36,7 +38,8 @@ RECALL_SAFE_ENEMY_TURNS = 5 # do not start a recall with an enemy closer than th
 
 # ---- Camp scoring ------------------------------------------------------------
 GEM_VALUE = 1.0
-GOLD_VALUE = 0.15           # gems win games; gold only buys shards (150 gold = one emblem)
+GOLD_VALUE = 0.1            # gems win games; gold only buys shards (150 gold = one emblem). Camps
+                            # now pay about ten gold per gem, so this keeps gold a minority of value.
 CAPTURE_TURNS = 5
 MAX_CAMP_CANDIDATES = 12
 MAX_CAMP_TURNS = 60         # ignore camps further than this
@@ -73,8 +76,11 @@ NN_FUEL_RESERVE = 900_000   # fuel that must remain after a network runs
 
 # ---- Fuel --------------------------------------------------------------------
 FUEL_RESERVE = 250_000      # stop optional work below this much remaining fuel
-FINISH_INIT_RESERVE = 300_000   # finish_init (run after acting) stops building group anchors below this
+FINISH_INIT_RESERVE = 500_000   # finish_init (run after acting) stops building group anchors below this
                                 # much fuel and resumes next turn
+FIELD_COST_PER_TILE = 80        # a DistanceField over the map costs about this per tile (750K at 100x100);
+                                # fields are only built when that much plus the reserve is in hand
+FIELD_BUILD_RESERVE = 1_000_000 # fuel that must remain after building an optional field mid-turn
 STUCK_TURNS = 10            # turns without a move or an action before a body drops its target ...
 STUCK_AVOID_ROUNDS = 20     # ... and leaves that group alone for this long (usually it is just crowded)
 FIRST_TURN_MIN = 1_000_000  # end the first turn without acting if setup left less than this ...
@@ -84,22 +90,26 @@ PROFILE_EVERY = 0           # rounds between per-phase fuel lines (0 disables)
 CAPTURE_MEMORY_ROUNDS = 15  # trust a seen "reward available" state for this long
 
 # ---- Draft -------------------------------------------------------------------
-# Pick order. Melee auto-attackers farm fastest in a damage race; Vendetta's cooldown
-# resets on camp kills, Varg's splash clears groups, Ryth and Marcella are tanks.
-DRAFT_PRIORITY = ("VENDETTA", "VARG", "RYTH", "MARCELLA", "REN", "VESPER_VALE",
-                  "STELLAR", "TAVI", "PRISM", "CASSI_AND_ISSAC", "WILLOW")
+# Pick order (week 2 patch, 2026-10-20). Melee auto-attackers farm fastest in a damage race:
+# Vendetta has the top strength and resets on camp kills, Marcella now earns gold per gem
+# tributed and is stun-immune, Ryth and Heart of Ruin are durable melee with stuns, Varg's
+# splash still clears packs. Ranged picks last: they cannot move and shoot.
+DRAFT_PRIORITY = ("VENDETTA", "MARCELLA", "RYTH", "VARG", "HEART_OF_RUIN", "REN", "VESPER_VALE",
+                  "WILLOW", "STELLAR", "TAVI", "PRISM", "CASSI_AND_ISSAC")
+N_DRAFT_PICKS = 12          # ChampionDraft values 0..11 (Cassi & Issac are one pick)
 SMALL_MAP_TILES = 40 * 40   # maps smaller than this are "small": more contact, more aggression
 
 # ChampionType order in the SDK (Cassi and Issac are separate bodies here).
 CHAMPION_NAMES = ("RYTH", "VESPER_VALE", "VENDETTA", "CASSI", "ISSAC", "STELLAR", "PRISM", "MARCELLA",
-                  "WILLOW", "REN", "VARG", "TAVI")
+                  "WILLOW", "REN", "VARG", "TAVI", "HEART_OF_RUIN")
 
 # ---- Builds ------------------------------------------------------------------
 # Per champion type name: which stat the shards buy. Emblem family order is in SHOP_FAMILIES.
 BUILD_STAT = {
     "RYTH": "HEALTH", "VESPER_VALE": "STRENGTH", "VENDETTA": "STRENGTH", "CASSI": "FOCUS",
     "ISSAC": "STRENGTH", "STELLAR": "FOCUS", "PRISM": "FOCUS", "MARCELLA": "STRENGTH",
-    "WILLOW": "FOCUS", "REN": "STRENGTH", "VARG": "STRENGTH", "TAVI": "FOCUS",
+    "WILLOW": "FOCUS", "REN": "STRENGTH", "VARG": "STRENGTH", "TAVI": "STRENGTH",
+    "HEART_OF_RUIN": "STRENGTH",
 }
 # Jungle first: 30% less camp damage is the biggest lever in a damage race against monsters.
 SHOP_FAMILIES = ("JUNGLE", "MONSTER", "POWER", "DURABILITY", "TREASURE", "HOME", "BRUISER")
