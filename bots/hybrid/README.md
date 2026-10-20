@@ -158,9 +158,11 @@ A platform replay holds the inputs only (draft picks and each champion's actions
 has to be re-simulated. The visualiser ships the engine as WebAssembly with a timeline API, and
 `tools/` drives it offline:
 
-1. `fetch_replays.py --teams 15 --per-team 20` downloads the finished ranked matches of the top
-   ladder teams with `cambc matches download` and writes `index.json` (map, teams, ratings,
-   results). Needs `cambc login`.
+1. `fetch_replays.py --teams 100 --per-team 10 --since <UTC ISO> --won-only -o
+   data/replays/<engine>/raw` downloads finished ranked matches of the top ladder teams with
+   `cambc matches download` and writes `index.json` (map, teams, ratings, results). `--since`
+   starts at a balance patch and `--won-only` keeps the matches the listed team won. One folder
+   per game version keeps rule sets apart. Needs `cambc login`.
 2. `fetch_viewer.py` copies the engine wasm files and the decoder chunks out of a running
    `cambc view` into `replays/dev/viewer/` (re-run after a cambc upgrade; the replay's version
    bytes pick the wasm).
@@ -169,8 +171,8 @@ has to be re-simulated. The visualiser ships the engine as WebAssembly with a ti
    champion's input, reads that champion's perspective snapshot (exactly what the SDK would
    show), its vision buffer, every camp's health and the actions it then took. About a second a
    game. Seeking to each input instead re-simulates from a checkpoint and takes seven minutes.
-4. `replay_features.py data/replays/ladder --index data/replays/raw/index.json --jobs 10 -o
-   data/ladder_modes.npz` rebuilds `World`, `Turn` and `Decider` from each dump with the SDK
+4. `replay_features.py data/replays/<engine>/ladder --index data/replays/<engine>/raw/index.json
+   --winners-only --jobs 10 -o data/replays/<engine>/modes.npz` rebuilds `World`, `Turn` and `Decider` from each dump with the SDK
    stubbed out, runs the bot's own `features.build()` and candidate generation, infers the mode
    the other team's champion was in from what it did (attack a camp it stood next to, walk toward
    an altar carrying gems, fight, flee, recall, otherwise farm) and labels the row with the

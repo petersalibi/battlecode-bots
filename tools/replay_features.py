@@ -27,6 +27,9 @@ import types
 
 import numpy as np
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from progress import Progress  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "bots", "hybrid", "src")
 
@@ -570,19 +573,28 @@ def main():
     ap.add_argument("-o", "--out", default=os.path.join(ROOT, "data", "replay_modes.npz"))
     ap.add_argument("--check", help="nnlog text of the same game for a feature comparison")
     ap.add_argument("--index", help="fetch_replays.py index.json: adds each side's ladder rating and result")
-    ap.add_argument("--jobs", type=int, default=1, help="dumps to process in parallel")
+    ap.add_argument("--jobs", type=int, default=12, help="dumps to process in parallel")
+    ap.add_argument("--winners-only", action="store_true", help="keep only the rows of sides that won (needs --index)")
     args = ap.parse_args()
     index = json.load(open(args.index, encoding="utf-8")) if args.index else {}
     dumps = []
     for d in args.dumps:
         dumps += [os.path.join(d, f) for f in sorted(os.listdir(d)) if f.endswith(".jsonl.gz")] if os.path.isdir(d) else [d]
     parts, side_info = [], []
+    bar = Progress(len(dumps), "features")
     if args.jobs > 1 and len(dumps) > 1 and not args.check:
         from multiprocessing import Pool
+        results = []
         with Pool(args.jobs) as pool:
-            results = pool.map(process, dumps)
+            for out in pool.imap(process, dumps):
+                results.append(out)
+                bar.step()
     else:
-        results = [process(p, args.check) for p in dumps]
+        results = []
+        for p in dumps:
+            results.append(process(p, args.check))
+            bar.step()
+    bar.done()
     for p, out in zip(dumps, results):
         if out is not None:
             parts.append(out)
@@ -594,7 +606,8 @@ def main():
                 t = by_side.get(side, {})
                 info.append((float(t.get("rating") or 0.0), 1.0 if t.get("result") == "win" else 0.0))
             side_info.append(info)
-            print(f"{os.path.basename(p)}: {len(out['X'])} rows" + (f" ({' vs '.join(t.get('name', '?') for t in entry.get('teams', []))})" if entry else ""))
+            if len(dumps) <= 12:
+                print(f"{os.path.basename(p)}: {len(out['X'])} rows" + (f" ({' vs '.join(t.get('name', '?') for t in entry.get('teams', []))})" if entry else ""))
     if parts and not args.check:
         X = np.concatenate([p["X"] for p in parts]); mask = np.concatenate([p["mask"] for p in parts])
         y = np.concatenate([p["y"] for p in parts]); reward = np.concatenate([p["reward"] for p in parts])
@@ -602,6 +615,10 @@ def main():
         match_id = np.concatenate([np.full(len(p["X"]), i, dtype=np.int32) for i, p in enumerate(parts)])
         rating = np.concatenate([np.array([side_info[i][int(team)][0] for team in p["meta"][:, 6]], dtype=np.float32) for i, p in enumerate(parts)])
         won = np.concatenate([np.array([side_info[i][int(team)][1] for team in p["meta"][:, 6]], dtype=np.float32) for i, p in enumerate(parts)])
+        if args.winners_only:
+            keep = won > 0
+            print(f"keeping the {int(keep.sum())} rows of winning sides out of {len(keep)}")
+            X, mask, y, reward, meta, match_id, rating, won = (a[keep] for a in (X, mask, y, reward, meta, match_id, rating, won))
         np.savez_compressed(args.out, X=X, mask=mask, y=y, reward=reward, meta=meta, match_id=match_id, rating=rating, won=won,
                             scores=np.zeros((len(X), config.N_MODES), dtype=np.float32))
         if args.index:

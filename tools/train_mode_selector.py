@@ -25,6 +25,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from progress import Progress  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "bots", "hybrid", "src"))
 import config  # noqa: E402
@@ -92,6 +95,7 @@ def train(X, mask, y, w, test, epochs, lr, batch, seed, logit_l2=0.0, smoothing=
     Xv, Mv, yv = torch.tensor(X[test]), torch.tensor(mask[test]), torch.tensor(y[test])
     n = len(Xt)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, epochs)
+    bar = Progress(epochs, "epochs")
     for epoch in range(epochs):
         net.train()
         perm = torch.randperm(n)
@@ -118,9 +122,11 @@ def train(X, mask, y, w, test, epochs, lr, batch, seed, logit_l2=0.0, smoothing=
             opt.step()
             total += ce_loss.item() * len(idx)
         sched.step()
+        bar.step(note=f"ce {total / n:.3f}")
         if epoch % 5 == 0 or epoch == epochs - 1:
             print(f"epoch {epoch:3d} ce {total / n:.4f} train acc {accuracy(net, Xt, Mt, yt):.3f} "
                   f"test acc {accuracy(net, Xv, Mv, yv):.3f} {logit_stats(net, Xv[:5000])}")
+    bar.done()
     return net
 
 

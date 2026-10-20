@@ -1,6 +1,6 @@
 """Re-simulate replays with the visualiser's engine and dump per-champion-turn state.
 
-    python tools/replay_dump.py <replay.repl26a | match.zip | bundle.repl26a | folder> [...] -o data/replays/ --jobs 6
+    python tools/replay_dump.py <replay.repl26a | match.zip | bundle.repl26a | folder> [...] -o data/replays/ --jobs 12
 
 Accepts the platform's match zips (`cambc matches download`), local harness bundles, bare
 replay files, or folders of them. The replay's engine version (bytes 8-10 of the header) picks
@@ -19,6 +19,9 @@ import sys
 import tempfile
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from progress import Progress  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VIEWER = os.path.join(ROOT, "replays", "dev", "viewer")
@@ -61,7 +64,7 @@ def engine_for(data):
     raise FileNotFoundError("no engine wasm for %s in %s" % (version, VIEWER))
 
 
-def dump(path, out_dir, probe=False):
+def dump(path, out_dir, probe=False, verbose=True):
     data = replay_bytes(path)
     wasm, version = engine_for(data)
     name = os.path.splitext(os.path.basename(path))[0]
@@ -85,7 +88,8 @@ def dump(path, out_dir, probe=False):
         out = os.path.join(out_dir, name + ".jsonl.gz")
         with open(jsonl, "rb") as src, gzip.open(out, "wb") as dst:
             shutil.copyfileobj(src, dst)
-    print(f"{name}: engine {version} -> {out} ({os.path.getsize(out) // 1024} KB)")
+    if verbose:
+        print(f"{name}: engine {version} -> {out} ({os.path.getsize(out) // 1024} KB)")
     return out
 
 
@@ -94,7 +98,7 @@ def main():
     ap.add_argument("replays", nargs="+", help="replay files, match zips, bundles or folders of them")
     ap.add_argument("-o", "--out", default=os.path.join(ROOT, "data", "replays"))
     ap.add_argument("--probe", action="store_true")
-    ap.add_argument("--jobs", type=int, default=1, help="replays to process in parallel (one node process each)")
+    ap.add_argument("--jobs", type=int, default=12, help="replays to process in parallel (one node process each)")
     args = ap.parse_args()
     paths = []
     for path in args.replays:
@@ -104,12 +108,19 @@ def main():
             paths.append(path)
     todo = [p for p in paths if not os.path.exists(os.path.join(args.out, os.path.splitext(os.path.basename(p))[0] + ".jsonl.gz"))]
     print(f"{len(todo)} replays to dump ({len(paths) - len(todo)} already done)")
+    bar = Progress(len(todo), "dumping")
+
+    def one(p):
+        out = dump(p, args.out, args.probe, verbose=args.probe)
+        bar.step(note=os.path.basename(p))
+        return out
     if args.jobs > 1 and len(todo) > 1:
         with ThreadPoolExecutor(args.jobs) as pool:
-            list(pool.map(lambda p: dump(p, args.out, args.probe), todo))
+            done = [o for o in pool.map(one, todo) if o]
     else:
-        for path in todo:
-            dump(path, args.out, args.probe)
+        done = [o for o in map(one, todo) if o]
+    bar.done()
+    print(f"{len(done)} replays dumped to {args.out}")
 
 
 if __name__ == "__main__":
