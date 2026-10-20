@@ -4,6 +4,7 @@ The first draft turn has 10x fuel and sees the whole map. A safe pick is locked 
 analysis, because a missed pick is chosen at random.
 """
 import cambc
+import _cambc
 from cambc import game_map
 
 import config
@@ -24,9 +25,78 @@ def _map_is_small():
     return game_map.width() * game_map.height() < config.SMALL_MAP_TILES
 
 
-def _choose(available, small_map):
+def _dash_map():
+    """True when holes wall most camps off from our spawn: with holes as walls fewer than half as
+    many camps are within MAX_CAMP_TURNS as with the thin (dash-crossable) holes passable. Costs
+    about 1.8M fuel (two fields and the camp groups), so only on the first draft turn, which has
+    ten times the budget; later turns read the flag back from the plan."""
+    try:
+        previous = memory_codec.decode_plan(bytes(cambc.DraftMemoryBuffer()))
+        if previous["team_size"]:
+            return previous["dash_map"]
+    except Exception:
+        pass
+    if _cambc.fuel_remaining() < config.DASH_MAP_FUEL:
+        return False
+    try:
+        Bitboard, DistanceField = cambc.Bitboard, cambc.DistanceField
+        walls, holes = game_map.walls(), game_map.holes()
+        if holes.is_empty():
+            return False
+        camp_tiles = Bitboard()
+        for group in game_map.camp_groups():
+            for camp in group.camps():
+                camp_tiles.set(camp.spawn_position(), True)
+        blocked = walls | holes | game_map.altars() | game_map.spawn_region(cambc.Team.ENEMY) | camp_tiles
+        walk = ~blocked
+        thin = Bitboard()
+        for dx, dy in ((1, 0), (0, 1), (1, 1), (1, -1)):
+            a = walk
+            b = walk
+            if dx:
+                a = a.shift_right(dx)
+                b = b.shift_right(-dx)
+            if dy:
+                a = a.shift_up(dy)
+                b = b.shift_up(-dy)
+            thin |= holes & a & b
+        if thin.is_empty():
+            return False
+        spawn = game_map.spawn_region(cambc.Team.ALLY)
+        reach = config.MAX_CAMP_TURNS + 1
+        width, height = game_map.width(), game_map.height()
+
+        def camps_within(board):
+            field = DistanceField()
+            field.compute(board, spawn, Bitboard(), reach)
+            count = 0
+            for tile in camp_tiles.positions():
+                for dx in (-1, 0, 1):
+                    for dy in (-1, 0, 1):
+                        x, y = tile.x + dx, tile.y + dy
+                        if (dx or dy) and 0 <= x < width and 0 <= y < height and field.get(cambc.Vec2(x, y)) <= reach:
+                            count += 1
+                            break
+                    else:
+                        continue
+                    break
+            return count
+
+        walking = camps_within(blocked)
+        dashing = camps_within(blocked & ~thin)
+        print(f"draft: camps within {reach} turns: walking {walking}, with dashes {dashing}", flush=True)
+        return dashing >= config.DASH_MAP_RATIO * max(walking, 1) or walking == 0
+    except Exception as error:
+        print(f"draft: dash map check failed: {error!r}", flush=True)
+        return False
+
+
+def _choose(available, small_map, dash_map=False):
     """Scripted pick: priority order, nudged by map size. Replace with a network later."""
     order = _priority()
+    if dash_map:
+        front = [getattr(Draft, name) for name in config.DASH_DRAFT_PRIORITY]
+        order = front + [pick for pick in order if pick not in front]
     if small_map:
         # Small maps mean fights: prefer the tanks and stun-immune Marcella a little earlier.
         for name in ("MARCELLA", "RYTH"):
@@ -58,15 +128,16 @@ def play():
     if not available:
         return
     small_map = _map_is_small()
+    dash_map = _dash_map()
 
     # Lock in a pick first, then spend the remaining fuel on the plan.
-    pick = _choose(available, small_map)
+    pick = _choose(available, small_map, dash_map)
     cambc.draft.pick(pick)
 
     picks = list(chosen) + [pick]
     team_size = cambc.draft.team_size()
     aggression = 170 if small_map else 90
-    plan = memory_codec.encode_plan(team_size, aggression, small_map, _body_stats(picks))
+    plan = memory_codec.encode_plan(team_size, aggression, small_map, _body_stats(picks), dash_map)
     cambc.draft_memory.submit(plan)
     print(f"draft: round {len(picks)}/{team_size} picked {Draft.to_string(pick) if hasattr(Draft, 'to_string') else pick}",
           flush=True)

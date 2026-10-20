@@ -7,6 +7,7 @@ field costs one next_moves_from call plus a few is_set checks.
 import cambc
 from cambc import vision
 
+import config
 import world as W
 
 Bitboard = cambc.Bitboard
@@ -110,11 +111,24 @@ class Navigator:
                     best, best_value = tile, value
             return best is not None and self._move(best)
         # Optimal steps first: one engine call plus a membership test each.
+        through_hole = False
         for delta in field.next_moves_from(w.pos):
             dest = w.pos + delta
             if not blocked.is_set(dest):
                 if self._move(dest):
                     return True
+            elif w.has_dash and w.thin_holes.is_set(dest):
+                through_hole = True
+        if through_hole and self.try_dash(field, min_gain=1):
+            # Dashing and walking are compatible: keep going from the landing tile.
+            here = field.get(w.pos)
+            if here == 0:
+                return True
+            for delta in field.next_moves_from(w.pos):
+                dest = w.pos + delta
+                if not blocked.is_set(dest) and self._move(dest):
+                    return True
+            return True
         # Every optimal step is occupied: take any reachable tile that still improves, or failing
         # that a sideways tile of equal distance that has a free step of its own (so a body blocked
         # by a unit walks round it instead of waiting). Never the tile we just left.
@@ -151,8 +165,11 @@ class Navigator:
                 best, best_key = tile, key
         return best is not None and best != w.pos and self._move(best)
 
-    def try_dash(self, field):
-        """Use a dash ability to skip ahead along the field. Returns True when it fired."""
+    def try_dash(self, field, min_gain=2):
+        """Use a dash ability to skip ahead along the field, over a hole if that is the way.
+        Returns True when it fired. The landing must improve the field by min_gain (a plain step
+        gains 1, so 2 is the default; the hole crossing asks for 1 because the alternative is
+        standing still)."""
         w = self.w
         if not w.can_cast or w.cast_exclusive:
             return False
@@ -164,17 +181,31 @@ class Navigator:
                     return False
                 here = field.get(w.pos)
                 blocked = self.blocked()
-                best, best_value = None, here - 1       # a dash must beat a plain step
-                for tile in blocked.reachable_tiles(w.pos, rec.range or 2).positions():
+                # valid_tiles is the square within range; it ignores occupancy and terrain, so the
+                # landing is filtered here. The engine rejects a landing with no legal 2-step path
+                # (a wall in the way), in which case the next best tile is tried.
+                if config.DASH_SQUARE_LANDINGS:
+                    landings = rec.ability.valid_tiles() & ~blocked
+                else:
+                    landings = blocked.reachable_tiles(w.pos, rec.range or 2)
+                options = []
+                for tile in landings.positions():
                     value = field.get(tile)
-                    if value < best_value:
-                        best, best_value = tile, value
-                if best is not None and rec.ability.use(best):
-                    w.can_cast = False
-                    self.occupy(w.pos)
-                    w.pos = best
-                    blocked.set(best, True)
-                    return True
+                    if value <= here - min_gain:
+                        options.append((value, tile.x, tile.y, tile))
+                options.sort()
+                for value, _x, _y, tile in options[:3]:
+                    try:
+                        if rec.ability.use(tile):
+                            w.can_cast = False
+                            self.occupy(w.pos)
+                            w.pos = tile
+                            w.at_spawn = w.spawn_ally.is_set(tile)
+                            w.in_bush = w.bushes.is_set(tile)
+                            blocked.set(tile, True)
+                            return True
+                    except Exception:
+                        continue
             except Exception:
                 return False
         return False

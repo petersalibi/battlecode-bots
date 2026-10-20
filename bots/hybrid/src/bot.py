@@ -116,6 +116,9 @@ class Bot:
             # Leftover fuel builds the group anchors and vision masks, a few groups per turn, after
             # the turn's actions are safely done (a suspended turn loses its actions).
             w.finish_init()
+            if w.fields_changed:
+                w.fields_changed = False
+                self.nav.fields.clear()
 
     def _stall_guard(self, mode):
         """A body that neither moves nor acts for STUCK_TURNS turns, without meaning to wait, has

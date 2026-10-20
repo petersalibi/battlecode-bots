@@ -190,6 +190,22 @@ class World:
             camp_tiles |= g.tiles
         self.camp_tiles = camp_tiles
         self.static_blocked = self.terrain_blocked | camp_tiles
+        # A dash (Issac, Vesper Vale, Vendetta, Ren, Heart of Ruin: 2 tiles, cooldown 8) crosses a
+        # hole. A hole with walkable tiles on opposite sides is "thin": for a champion with a dash
+        # every cached field treats it as passable, so routes cross hole lines that wall whole
+        # maps off for walkers (01starvation: 180 turns round, 40 across). Stepping still never
+        # enters a hole; the navigator dashes over it when the route goes through one.
+        self.thin_holes = Bitboard()
+        self.has_dash = False
+        try:
+            self.has_dash = any(a.is_dash() for a in me.abilities())
+        except Exception:
+            pass
+        # Bitboard shifts, about 130K fuel. The first turn is near its budget on the biggest maps
+        # (islands: 46 groups, 878 holes), so this always waits for finish_init's leftover fuel,
+        # which then rebuilds the spawn field. Never positions() here: a list of 878 Vec2 costs
+        # 250K on its own.
+        self.thin_pending = config.DASH_ROUTES and self.has_dash and not self.holes.is_empty()
         marks.append(_cambc.fuel_remaining())
 
         # Static distance field to our spawn. A 100x100 field costs ~750K, and the first turn's
@@ -198,6 +214,7 @@ class World:
         self.spawn_field = DistanceField()
         self.spawn_field.compute(self.static_blocked, self.spawn_ally, Bitboard())
         self.altar_field = None
+        self.fields_changed = False            # bot.py clears the navigator's cached fields when set
         self.altar_goals = None
         self._enemy_spawn_field = None       # built on first use (features only)
         self.group_of_camp = {}
@@ -253,9 +270,42 @@ class World:
                 dps += self.strength / ABILITY_COOLDOWN
         return max(dps, 1.0)
 
+    def _find_thin_holes(self):
+        """Holes with walkable tiles on opposite sides (a legal two-step dash path), via shifts
+        along the four axes. Removes them from static_blocked so every field built afterwards
+        routes across them."""
+        self.thin_pending = False
+        walk = ~self.static_blocked
+        for dx, dy in ((1, 0), (0, 1), (1, 1), (1, -1)):
+            a = walk
+            b = walk
+            if dx:
+                a = a.shift_right(dx)
+                b = b.shift_right(-dx)
+            if dy:
+                a = a.shift_up(dy)
+                b = b.shift_up(-dy)
+            self.thin_holes |= self.holes & a & b
+        if not self.thin_holes.is_empty():
+            self.static_blocked = self.static_blocked & ~self.thin_holes
+            return True
+        return False
+
     def finish_init(self):
         """Setup that did not fit in the first turn's budget, run at the end of each turn on leftover
         fuel until every group has its anchor (stops early when fuel runs short, resumes next turn)."""
+        if self.thin_pending:
+            field_cost = config.FIELD_COST_PER_TILE * self.width * self.height
+            if _fuel() < config.FINISH_INIT_RESERVE + config.THIN_HOLES_COST + field_cost:
+                return
+            if self._find_thin_holes():
+                # The spawn field and any anchors were built with the holes as walls.
+                self.spawn_field = DistanceField()
+                self.spawn_field.compute(self.static_blocked, self.spawn_ally, Bitboard())
+                for g in self.groups:
+                    g.anchor = None
+                    g.reachable = True
+                self.fields_changed = True
         if self.altar_field is None:
             if _fuel() < config.FINISH_INIT_RESERVE + config.FIELD_COST_PER_TILE * self.width * self.height:
                 return

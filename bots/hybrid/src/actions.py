@@ -181,15 +181,18 @@ class Actions:
         stale = g is None or (g.state != d.target_state and g.state in (W.REWARD, W.RESPAWNING)) or (
             not engaged and w.round - d.target_round >= config.RETARGET_EVERY)
         if stale:
-            before = fuel.remaining() if config.PROFILE_EVERY else 0
+            before = fuel.remaining()
             best = d.choose_camp(turn, w)
             g = best.group if best is not None else None
             d.target_group = g
             d.target_state = g.state if g is not None else None
             d.target_bodies = best.bodies if best is not None else 1
             d.target_round = w.round
+            cost = before - fuel.remaining()
+            if cost > d.retarget_peak:
+                d.retarget_peak = cost      # informational: the network's reserve covers acting via act_peak
             if config.PROFILE_EVERY and config.LOG_DECISIONS:
-                print("r%d %s: retarget cost %d" % (w.round, w.kind_name, before - fuel.remaining()), flush=True)
+                print("r%d %s: retarget cost %d" % (w.round, w.kind_name, cost), flush=True)
         if g is None:
             # Nothing worth farming: bank gems if we have any, otherwise wait near our spawn.
             if w.gems > 0 and turn.altar() is not None:

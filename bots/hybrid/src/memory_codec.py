@@ -50,11 +50,11 @@ def read_enemy_seen():
 
 # ---- Draft memory -------------------------------------------------------------
 
-def encode_plan(team_size, aggression, small_map, stats):
+def encode_plan(team_size, aggression, small_map, stats, dash_map=False):
     body = bytearray(_MAGIC)
     body.append(team_size & 0xFF)
     body.append(max(0, min(255, aggression)))
-    body.append(1 if small_map else 0)
+    body.append((1 if small_map else 0) | (2 if dash_map else 0))
     for stat in list(stats)[:MAX_BODIES]:
         body.append(stat & 0xFF)
     return bytes(body)
@@ -62,11 +62,12 @@ def encode_plan(team_size, aggression, small_map, stats):
 
 def decode_plan(raw):
     """Returns a dict, with defaults when the memory is empty or from another bot version."""
-    plan = {"team_size": 0, "aggression": 128, "small_map": False, "stats": []}
+    plan = {"team_size": 0, "aggression": 128, "small_map": False, "dash_map": False, "stats": []}
     if len(raw) >= 6 and raw[:3] == _MAGIC:
         plan["team_size"] = raw[3]
         plan["aggression"] = raw[4]
-        plan["small_map"] = bool(raw[5])
+        plan["small_map"] = bool(raw[5] & 1)
+        plan["dash_map"] = bool(raw[5] & 2)
         plan["stats"] = list(raw[6:6 + MAX_BODIES])
     return plan
 

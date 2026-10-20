@@ -78,8 +78,10 @@ USE_NN_MODE = True          # the mode selector in weights.MODE_SELECTOR decides
 USE_NN_CAMP = False
 NN_MIN_MARGIN = 8           # fall back to the script when the top two scores are this close
 NN_FUEL_RESERVE = 1_000_000 # fuel that must remain after a network runs, plus 1.5 map fields (acting can build one)
-NN_SKIP_ROUNDS = 6          # no network while finish_init is still building fields from leftover fuel
+NN_SKIP_ROUNDS = 15         # no network until the first retargets have shown what acting costs (exhaustions at round 12 before)
 NN_ACT_MARGIN = 300_000     # added to the worst act cost seen when sizing the network's reserve
+NN_GROUP_RESERVE = 40_000   # per camp group beyond NN_GROUP_FREE: re-ranking 46 groups (islands) costs 900K ...
+NN_GROUP_FREE = 30          # ... while a flat per-group reserve cost five wins a sweep on ordinary maps
 
 # ---- Fuel --------------------------------------------------------------------
 FUEL_RESERVE = 250_000      # stop optional work below this much remaining fuel
@@ -88,6 +90,9 @@ FINISH_INIT_RESERVE = 500_000   # finish_init (run after acting) stops building 
 FIELD_COST_PER_TILE = 80        # a DistanceField over the map costs about this per tile (750K at 100x100);
                                 # fields are only built when that much plus the reserve is in hand
 FIELD_BUILD_RESERVE = 1_000_000 # fuel that must remain after building an optional field mid-turn
+THIN_HOLES_COST = 150_000       # bitboard shifts that find the holes a dash can cross (~130K at 80x80)
+DASH_ROUTES = True              # champions with a dash route across thin holes (fields treat them as passable)
+DASH_SQUARE_LANDINGS = True     # dash landings from the ability's range square (crosses holes) instead of walked tiles
 STUCK_TURNS = 10            # turns without a move or an action before a body drops its target ...
 STUCK_AVOID_ROUNDS = 20     # ... and leaves that group alone for this long (usually it is just crowded)
 FIRST_TURN_MIN = 1_000_000  # end the first turn without acting if setup left less than this ...
@@ -104,6 +109,11 @@ CAPTURE_MEMORY_ROUNDS = 15  # trust a seen "reward available" state for this lon
 DRAFT_PRIORITY = ("VENDETTA", "MARCELLA", "RYTH", "VARG", "HEART_OF_RUIN", "REN", "VESPER_VALE",
                   "WILLOW", "STELLAR", "TAVI", "PRISM", "CASSI_AND_ISSAC")
 N_DRAFT_PICKS = 12          # ChampionDraft values 0..11 (Cassi & Issac are one pick)
+# Champions whose dash crosses holes, first on maps where holes wall the camps off (starvation,
+# islands, shortcut, fracture, concentrated-wealth): a walker there has nothing to farm.
+DASH_DRAFT_PRIORITY = ("VENDETTA", "HEART_OF_RUIN", "REN", "VESPER_VALE", "CASSI_AND_ISSAC")
+DASH_MAP_RATIO = 2          # a map is a "dash map" when dashes at least double the camps within reach
+DASH_MAP_FUEL = 4_000_000   # the dash-map check (two fields plus the camp groups) needs this much in hand
 SMALL_MAP_TILES = 40 * 40   # maps smaller than this are "small": more contact, more aggression
 
 # ChampionType order in the SDK (Cassi and Issac are separate bodies here).

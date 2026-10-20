@@ -87,6 +87,26 @@ size, an aggression byte and the per-body shard stat.
   are cast on the current target when ready; attack resets give a second basic attack; dashes
   shortcut along the current field; shields fire when taking damage; Willow heals a hurt ally.
 
+### Dashes cross holes (2026-10-21)
+
+Holes cannot be walked on but a dash (Issac, Vesper Vale, Vendetta, Ren, Heart of Ruin: two
+tiles, cooldown 8, compatible with walking) crosses them. For a champion with a dash, `World`
+finds the thin holes, those with walkable tiles on opposite sides (four bitboard shifts, about
+130K fuel, run from `finish_init`'s leftover fuel because the first turn is full on the big
+maps), and removes them from `static_blocked`, so every cached field routes across them. Stepping
+still never enters a hole: when the field's best step is a thin hole, `step_along` dashes to the
+best landing in the ability's range square (`valid_tiles`, filtered by the blocked board; the
+engine rejects a landing with no legal path and the next is tried) and then walks on from the
+landing. On cooldown the body waits at the edge, which the stall guard tolerates (10 turns).
+
+The gain is large wherever holes wall camps off. Camps within 60 turns of our spawn, walking
+against with dashes: starvation 0 to 14, islands 30 to 114, shortcut 19 to 82, fracture 23 to 80,
+concentrated-wealth 10 to 40, corridors 41 to 53. On the first draft turn (ten times the budget)
+`draft.py` counts both and, where dashes at least double the reach, drafts the dash champions
+first (`DASH_DRAFT_PRIORITY`); the flag travels in the plan. Starvation went from 0-0 draws to
+1008-0 wins. Against v5 the whole package scores 39-31 (+63 gems) with no fuel exhaustions, and
+54-16 (+241, deaths 763 against 1,363) against v4.
+
 ## Team memory (`memory_codec.py`)
 
 Shared memory: one claim byte per body (2-bit status, 6-bit group index), byte 6 the last round an
@@ -239,12 +259,10 @@ fuel budgeting above. Sweep against the v1 tag on the 21-map pool: 31-11.
 
 ## Known gaps
 
-- **01starvation scores nothing.** Holes wall the spawn pocket off; the only walking route to any
-  camp or altar is about 100 turns, beyond `MAX_CAMP_TURNS` (60), so no camp ever qualifies and
-  every body sits on the spawn (v4) or wanders (the network, which the stall guard then logs).
-  Dashes cross holes (the hole strip south of the pocket is one tile wide), so the answer is
-  dash-aware routing, not a bigger search radius: a whole-map search with a soft score floor was
-  tried on 2026-10-21 and lost 29-41 against v4 overall while still scoring 0 there.
+- **Islands runs out of fuel once or twice a game** with the dash draft (six bodies, 46 groups,
+  878 holes): the script's own refresh, re-rank and act can add up to 2.9M in one turn. The
+  network's reserve grows by 40K per group beyond 30 there, which removed the exhaustions in the
+  sweeps, at the price of the network running less on maps with many groups (lanes, islands).
 
 - **Deaths.** Down from 14 to 8.5 per side per game after the 2026-10-20 tuning (recall at 50%
   health, no new camp below 45%, kill steals below 40%, and a retreat from camps that would

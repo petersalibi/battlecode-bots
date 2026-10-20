@@ -21,6 +21,7 @@ class Decider:
         self.mode_turns = 0
         self.target_group = None      # Group being farmed
         self.act_peak = 0             # most fuel acting has cost in one turn (bot.py), for the network's reserve
+        self.retarget_peak = 0        # most fuel one camp re-rank has cost (actions.farm)
         self.target_round = -1000
         self.target_state = None      # the group's state when it was chosen
         self.target_bodies = 1        # champions the plan needs on the target group
@@ -186,7 +187,8 @@ class Decider:
         # Acting after the decision may build a whole-map field (80 fuel per tile) or re-rank 28
         # groups (01yellow-brick-road: 780K), so the reserve is the larger of a map-sized estimate
         # and a quarter more than the worst act seen this game.
-        reserve = max(config.NN_FUEL_RESERVE + 3 * config.FIELD_COST_PER_TILE * w.width * w.height // 2,
+        reserve = max(config.NN_FUEL_RESERVE + 3 * config.FIELD_COST_PER_TILE * w.width * w.height // 2
+                      + config.NN_GROUP_RESERVE * max(0, len(w.groups) - config.NN_GROUP_FREE),
                       self.act_peak * 5 // 4 + config.NN_ACT_MARGIN)
         if net is not None and w.round > config.NN_SKIP_ROUNDS and fuel.can_afford(MODE_SELECTOR_FUEL, reserve):
             try:
