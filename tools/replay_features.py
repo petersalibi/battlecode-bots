@@ -570,11 +570,20 @@ def main():
     ap.add_argument("-o", "--out", default=os.path.join(ROOT, "data", "replay_modes.npz"))
     ap.add_argument("--check", help="nnlog text of the same game for a feature comparison")
     ap.add_argument("--index", help="fetch_replays.py index.json: adds each side's ladder rating and result")
+    ap.add_argument("--jobs", type=int, default=1, help="dumps to process in parallel")
     args = ap.parse_args()
     index = json.load(open(args.index, encoding="utf-8")) if args.index else {}
+    dumps = []
+    for d in args.dumps:
+        dumps += [os.path.join(d, f) for f in sorted(os.listdir(d)) if f.endswith(".jsonl.gz")] if os.path.isdir(d) else [d]
     parts, side_info = [], []
-    for p in args.dumps:
-        out = process(p, args.check)
+    if args.jobs > 1 and len(dumps) > 1 and not args.check:
+        from multiprocessing import Pool
+        with Pool(args.jobs) as pool:
+            results = pool.map(process, dumps)
+    else:
+        results = [process(p, args.check) for p in dumps]
+    for p, out in zip(dumps, results):
         if out is not None:
             parts.append(out)
             match_id = os.path.basename(p).split(".")[0]
