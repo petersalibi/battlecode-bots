@@ -12,7 +12,7 @@ import nn
 import weights
 from config import FARM, CAPTURE, TRIBUTE, RECALL, FIGHT, FLEE, N_MODES
 
-MODE_SELECTOR_FUEL = 600_000
+MODE_SELECTOR_FUEL = 500_000      # features (reusing the script's camp scores) plus one 66-32-16-6 forward
 
 
 class Decider:
@@ -28,6 +28,7 @@ class Decider:
         self.last_scores = None
         self.last_source = "script"
         self.camp_cache = None
+        self.last_mask = None
         self.camp_cache_round = -1000
         self.cache_scored_round = -2000
         self.retargets = 0
@@ -159,6 +160,8 @@ class Decider:
 
     def choose_mode(self, w, turn):
         mask = self.masks(w, turn)
+        self.last_mask = mask
+        self.last_scores = None
         # Hard rule: a badly hurt champion with an enemy close by runs, and keeps running while
         # the enemy is in sight (hysteresis stops flee flipping back every other turn).
         if w.enemies and not w.at_spawn:
@@ -169,22 +172,26 @@ class Decider:
         if not w.at_spawn and self.camp_hitting(w) and w.hp_ratio < config.FLEE_HEALTH:
             return self._set_mode(FLEE, "rule")                       # a camp is finishing us off
 
-        chosen, source = None, "script"
-        net = weights.MODE_SELECTOR if config.USE_NN_MODE else None
-        if net is not None and fuel.can_afford(MODE_SELECTOR_FUEL, config.NN_FUEL_RESERVE):
-            try:
-                scores = net.forward(features.build(w, turn, self))
-                if nn.margin(scores, mask) >= config.NN_MIN_MARGIN:
-                    chosen, source = nn.masked_argmax(scores, mask), "nn"
-                    self.last_scores = scores
-            except Exception:
-                chosen = None
+        # The script always runs: it builds and scores the candidates the features summarise, and
+        # it is the fallback. The network then costs only the feature pass and one forward.
+        scores = self.script_scores(w, turn)
+        self.last_scores = scores
+        chosen, source = nn.masked_argmax(scores, mask), "script"
         if chosen is None:
-            scores = self.script_scores(w, turn)
-            self.last_scores = scores
-            chosen = nn.masked_argmax(scores, mask)
-            if chosen is None:
-                chosen = FARM
+            chosen = FARM
+        net = weights.MODE_SELECTOR if config.USE_NN_MODE else None
+        # Acting after the decision may build a whole-map field (80 fuel per tile), so the reserve
+        # grows with the map: on 100x100 the network only runs with 1.8M in hand.
+        reserve = config.NN_FUEL_RESERVE + config.FIELD_COST_PER_TILE * w.width * w.height
+        if net is not None and fuel.can_afford(MODE_SELECTOR_FUEL, reserve):
+            try:
+                net_scores = net.forward(features.build(w, turn, self, rescore=False))
+                if nn.margin(net_scores, mask) >= getattr(weights, "MODE_SELECTOR_MARGIN", config.NN_MIN_MARGIN):
+                    pick = nn.masked_argmax(net_scores, mask)
+                    if pick is not None:
+                        chosen, source = pick, "nn"
+            except Exception:
+                pass
         return self._set_mode(chosen, source)
 
     def _set_mode(self, mode, source):

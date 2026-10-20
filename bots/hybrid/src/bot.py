@@ -4,6 +4,7 @@ import cambc
 import actions
 import candidates
 import config
+import datalog
 import decide
 import fuel
 import memory_codec
@@ -68,7 +69,12 @@ class Bot:
             if g is not None:
                 self.d.target_group, self.d.target_state, self.d.target_round = g, g.state, w.round
         else:
+            prev_mode, prev_turns = self.d.mode, self.d.mode_turns
             mode = self.d.choose_mode(w, turn)
+            if config.DATALOG:
+                # Free in debug builds, never run in release or on the platform.
+                cambc.debug_block(lambda: datalog.write(w, turn, self.d, mode, self.d.last_mask, self.d.last_scores,
+                                                        prev_mode, prev_turns))
         after_decide = fuel.remaining()
         self.act.run(mode, turn)
         memory_codec.write_claim(w.slot, self.act.status, self.act.claim_group)

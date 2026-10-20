@@ -73,10 +73,11 @@ FLEE_ENEMY_RANGE = 5
 WARD_REPLACE_EVERY = 40
 
 # ---- Networks ----------------------------------------------------------------
-USE_NN_MODE = False         # swap the mode selector for weights.MODE_SELECTOR
+DATALOG = False             # log features, scores and the chosen mode every turn (debug builds only)
+USE_NN_MODE = True          # the mode selector in weights.MODE_SELECTOR decides when it is sure and fuel allows
 USE_NN_CAMP = False
 NN_MIN_MARGIN = 8           # fall back to the script when the top two scores are this close
-NN_FUEL_RESERVE = 900_000   # fuel that must remain after a network runs
+NN_FUEL_RESERVE = 1_000_000 # fuel that must remain after a network runs (acting can cost 0.6M)
 
 # ---- Fuel --------------------------------------------------------------------
 FUEL_RESERVE = 250_000      # stop optional work below this much remaining fuel

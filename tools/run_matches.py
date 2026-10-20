@@ -209,6 +209,7 @@ def main():
     ap.add_argument("--timeout", type=int, default=600, help="wall-clock seconds per match")
     ap.add_argument("--out", help="output directory (default: replays/batch/<timestamp>)")
     ap.add_argument("--debug", action="store_true", help="debug build instead of release")
+    ap.add_argument("--log-limit", type=int, help="byte limit for each team's stdout (default 1MB; raise for datalog)")
     args = ap.parse_args()
 
     cambc = find_cambc()
@@ -235,6 +236,8 @@ def main():
         cmd.append("--release")
     if args.rounds:
         cmd += ["--rounds", str(args.rounds)]
+    if args.log_limit:
+        cmd += ["--log-limit", str(args.log_limit)]
     print(f"{len(jobs)} matches on {len(maps)} maps, {args.jobs} jobs, output in {out}")
     started = time.time()
     proc = subprocess.run(cmd, cwd=ROOT)

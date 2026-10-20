@@ -103,12 +103,14 @@ C++ with WebAssembly SIMD measured about 2.2 fuel per multiply-add but with a 10
 
 Picks one of six modes for a champion: **farm, capture, tribute, recall and shop, fight, flee**. The scripted action modules carry out the chosen mode, and target choice inside each mode stays scripted at first.
 
-### Architecture: 64 → 32 → 16 → 6
+### Architecture: 66 → 32 → 16 → 6
+
+*2026-10-20: widened from 64 to 66 inputs so the champion one-hot covers all 13 body types (Tavi and Heart of Ruin had no slot). Everything after the one-hot keeps its order, shifted by two; the tables below still use the original numbering. `features.py` defines the block offsets.*
 
 | Layer | Size | Activation | Weights + biases | Multiply-adds |
 |---|---|---|---|---|
-| Input | 64 | already 0–255 | none | none |
-| Hidden 1 | 32 | ReLU | 2,080 | 2,048 |
+| Input | 66 | already 0–255 | none | none |
+| Hidden 1 | 32 | ReLU | 2,144 | 2,112 |
 | Hidden 2 | 16 | ReLU | 528 | 512 |
 | Output | 6 | none (scores) | 102 | 96 |
 | **Total** | | | **2,710** | **2,656** |
@@ -127,7 +129,7 @@ A per-turn selector can switch farm, tribute, farm on consecutive turns and wast
 - Inputs 27–33 (current mode and turns in it) let the network learn to stick with a mode.
 - Optionally give the current mode a small score bonus.
 
-### Inputs (64, each an integer 0–255)
+### Inputs (64 in the original numbering below; 66 as built, each an integer 0–255)
 
 Encoding rules for every input:
 
@@ -147,7 +149,7 @@ Encoding rules for every input:
 | 4 | Carried gems | `gem_count()` | clip 255 |
 | 5 | Gold | `gold_count()` | ÷ 4, clip 255 |
 | 6 | Shards bought | sum of `item_count()` | × 8, clip 255 |
-| 7–17 | Champion type | 11-way one-hot from `champion_name()` | 0 or 255 each |
+| 7–17 (now 7–19) | Champion type | 13-way one-hot from `champion_name()` | 0 or 255 each |
 | 18 | Slot 0 cooldown | `abilities()` slot 0 `cooldown()`, 0 = ready | × 32, clip 255 |
 | 19 | Slot 1 cooldown | same for slot 1 | × 32, clip 255 |
 | 20 | Stunned | `restrictions()` or the buff list's `has_stun()` | 0 or 255 |
@@ -319,7 +321,8 @@ A working version is in `bots/fuelbench/src/benches.py` (`PackedLayer`), checked
 | `memory_codec.py` | Draft memory (plan vector) and the shared-memory claims board. |
 | `nn.py` | Packed int8 inference engine. |
 | `weights.py` | Generated weights. |
-| Tools (not submitted) | `export_weights.py`, `parity_test.py`, `run_matches.py`, `fuel_report.py` |
+| `datalog.py` | Debug-build-only decision logger (`config.DATALOG`): features, mask, script scores and the chosen mode per turn, free via `debug_block`. |
+| Tools (not submitted) | `run_matches.py` (harness, `--debug --log-limit` for logging runs), `build_dataset.py` (logs + statistics JSON → features, choices and 60-round outcome labels), `train_mode_selector.py` (outcome-weighted imitation in PyTorch, post-training int8 quantisation, writes `weights.py`), `parity_test.py` (nn.py against a numpy integer reference), `death_report.py` |
 
 ## 13. Open questions
 
