@@ -344,6 +344,7 @@ class World:
             self.enemies = []
             self.allies = []
             self.visible_camps = []
+            self.camp_damage_incoming = 0.0
             self.nearest_enemy = None
             self.prev_hp = None
             self.damage_taken = 0.0
@@ -491,6 +492,14 @@ class World:
                     self.events.add("camp_cleared")
                 elif old == REWARD and g.state == RESPAWNING:
                     self.events.add("capture_finished")
+        # Damage per turn from living camps that have us in reach (3 for wolves, 4 for elks and
+        # golems, 5 for monoliths). They only hit when awake, so pair this with damage_taken.
+        incoming = 0.0
+        for camp, gi, pos, hp in self.visible_camps:
+            if hp > 0 and pos.chebyshev_distance(self.pos) <= self.groups[gi].attack_range:
+                g = self.groups[gi]
+                incoming += g.total_strength / max(g.n_camps, 1)
+        self.camp_damage_incoming = incoming
 
     # ---- derived -----------------------------------------------------------------
     def team_gems_banked(self):
@@ -547,13 +556,6 @@ class World:
         except Exception:
             pass
         self.capture_rounds_left = max(0, config.CAPTURE_TURNS - decider.mode_turns) if decider.mode == config.CAPTURE else 0
-        incoming = 0.0
-        for camp, gi, pos, hp in self.visible_camps:
-            # Camps reach 3 (wolf), 4 (elk, golem) or 5 (monolith) tiles since the week 2 patch.
-            if hp > 0 and pos.chebyshev_distance(self.pos) <= self.groups[gi].attack_range:
-                g = self.groups[gi]
-                incoming += g.total_strength / max(g.n_camps, 1)
-        self.camp_damage_incoming = incoming
 
     def allies_near(self, tile, distance):
         """Visible allies within distance of a tile (from the last ally scan)."""

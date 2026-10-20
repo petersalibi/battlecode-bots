@@ -150,8 +150,12 @@ fuel budgeting above. Sweep against the v1 tag on the 21-map pool: 31-11.
 
 ## Known gaps
 
-- **Deaths.** About 14 per side per game on the new engine; each costs 60 rounds and the bag,
-  and hands the killer 100 gold. The fight and flee thresholds in `config.py` predate the patch.
+- **Deaths.** Down from 14 to 8.5 per side per game after the 2026-10-20 tuning (recall at 50%
+  health, no new camp below 45%, kill steals below 40%, and a retreat from camps that would
+  finish us: camp deaths fell from 322 to 55 per sweep). What remains is almost all champion
+  kills of bodies already in flee mode: fleeing at walking speed from melee does not work, and
+  fleeing towards allies tested worse. `tools/death_report.py` breaks a sweep down by killer,
+  mode, health and map.
 - **Crowding stalls.** `stuck` fires 20 to 50 times a game on concentrated-wealth and boss-battle:
   several bodies converge on one camp block with one free approach tile. The guard releases them,
   but a helper cap based on the block's free ring would avoid the wait.

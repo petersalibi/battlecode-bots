@@ -353,6 +353,21 @@ class Actions:
         self.status = memory_codec.STATUS_BUSY
         self._cast_shield()
         if not w.enemies:
+            # Fleeing a camp: get out of its reach first (camps never chase and sleep after two
+            # quiet rounds), then recall once nothing is hitting us.
+            camps = [pos for camp, gi, pos, hp in w.visible_camps
+                     if hp > 0 and pos.chebyshev_distance(w.pos) <= w.groups[gi].attack_range + 1]
+            if camps and w.damage_taken > 0:
+                g = self.d.target_group
+                if g is not None:
+                    # Do not walk straight back into it after healing a little.
+                    g.avoid_until = w.round + config.CAMP_FLEE_AVOID_ROUNDS
+                    self.d.target_group = None
+                    self.d.camp_cache = None
+                if not self.nav.step_away(camps, w.spawn_field):
+                    self.nav.step_along(w.spawn_field)
+                self.nav.try_dash(w.spawn_field)
+                return
             if w.hp_ratio < config.RECALL_HEALTH and w.damage_taken <= 0 and not w.at_spawn:
                 try:
                     w.me.recall()

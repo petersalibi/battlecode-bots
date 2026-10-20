@@ -42,8 +42,31 @@ class Decider:
             w.gems > 0 and turn.altar() is not None,                  # TRIBUTE
             w.at_spawn or w.damage_taken <= 0,                        # RECALL (damage cancels it)
             has_enemy and bool(turn.fight_targets()),                 # FIGHT
-            has_enemy,                                                # FLEE
+            has_enemy or self.camp_hitting(w),                        # FLEE (from champions or camps)
         ]
+
+    @staticmethod
+    def camp_hitting(w):
+        """A living camp has us in reach and we lost health this turn: it is awake and on us."""
+        return w.camp_damage_incoming > 0 and w.damage_taken > 0
+
+    def camp_overrun(self, w):
+        """True when finishing the current camp fight would cost more health than we can spare:
+        the camps in reach keep hitting us for as long as their remaining health takes to clear.
+        More than half of all deaths were to camps, with no enemy in sight. Allies next to us
+        share the clearing, so their strength counts towards the clear rate."""
+        if not self.camp_hitting(w) or w.dps <= 0 or w.hp_ratio >= config.CAMP_FLEE_HEALTH:
+            return False
+        g = self.target_group
+        remaining = 0.0
+        for camp, gi, pos, hp in w.visible_camps:
+            if hp > 0 and (g is None or gi == g.index) and pos.chebyshev_distance(w.pos) <= w.groups[gi].attack_range:
+                remaining += hp
+        if remaining <= 0:
+            return False
+        team_dps = w.dps + sum(strength for pos, hp, strength, dist in w.allies if dist <= config.HELP_WAIT_RANGE)
+        turns = remaining / team_dps + 1
+        return w.camp_damage_incoming * turns >= w.hp - config.CAMP_FLEE_RESERVE * w.max_hp
 
     def script_scores(self, w, turn):
         scores = [0.0] * N_MODES
@@ -127,6 +150,9 @@ class Decider:
                 scores[FLEE] = 1.2
             else:
                 scores[FLEE] = 0.1
+        if self.camp_overrun(w):
+            # The camp will kill us before we kill it: step out of its reach, let it sleep, heal.
+            scores[FLEE] = max(scores[FLEE], 2.0)
 
         scores[self.mode] += config.MODE_STICKINESS
         return scores
@@ -140,6 +166,8 @@ class Decider:
                 return self._set_mode(FLEE, "rule")
             if self.mode == FLEE and w.hp_ratio < config.RECALL_HEALTH:
                 return self._set_mode(FLEE, "rule")
+        if not w.at_spawn and self.camp_hitting(w) and w.hp_ratio < config.FLEE_HEALTH:
+            return self._set_mode(FLEE, "rule")                       # a camp is finishing us off
 
         chosen, source = None, "script"
         net = weights.MODE_SELECTOR if config.USE_NN_MODE else None

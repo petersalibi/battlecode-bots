@@ -14,11 +14,15 @@ MODE_STICKINESS = 0.15
 
 # ---- Health thresholds (ratios of max health) --------------------------------
 FLEE_HEALTH = 0.30          # flee is forced below this when an enemy is visible
-RECALL_HEALTH = 0.40        # recall to heal below this when no enemy is near
+RECALL_HEALTH = 0.50        # recall to heal below this when no enemy is near (a death costs 60 rounds,
+                            # the bag and 100 gold to the killer; a recall costs about 15 turns)
 FIGHT_MIN_HEALTH = 0.55     # never start a fight below this
-CAMP_MIN_HEALTH = 0.30      # never start a new camp below this
+CAMP_MIN_HEALTH = 0.45      # never start a new camp below this
 SPAWN_LEAVE_HEALTH = 0.95   # stay on spawn until healed to this
 HEALTH_RESERVE = 0.20       # keep this much health in hand after clearing a camp
+CAMP_FLEE_HEALTH = 0.45     # below this, a camp fight that cannot be finished is abandoned ...
+CAMP_FLEE_RESERVE = 0.15    # ... when finishing it would leave less than this
+CAMP_FLEE_AVOID_ROUNDS = 40 # and that group is left alone for this long
 
 # ---- Tribute -----------------------------------------------------------------
 # Week 2 patch: a wolf pays 4 gems, an elk 15, a gem cluster 7, and a kill pays 100 gold, so
@@ -61,7 +65,7 @@ LOG_GROUPS = False          # print the camp group table on the first turn (dev 
 # ---- Fighting ----------------------------------------------------------------
 FIGHT_POWER_RATIO = 1.25    # fight when our local power exceeds theirs by this factor
 FIGHT_RANGE = 6             # consider enemies within this Chebyshev distance
-KILL_STEAL_HEALTH = 0.25    # attack an enemy below this regardless of balance
+KILL_STEAL_HEALTH = 0.40    # attack an enemy below this regardless of balance (kills pay 100 gold + bag)
 FLEE_POWER_RATIO = 0.7      # flee when our power is below this fraction of theirs
 FLEE_ENEMY_RANGE = 5
 
