@@ -195,7 +195,10 @@ rounds against 36.3, deaths 758 against 1,342, one fuel exhaustion. The own-play
 same bot code scores 39-31 (+25); head to head the two tie 35-35 with the ladder model +86 gems
 and 754 deaths against 1,303. The bot now skips the network for the first six rounds and sizes
 its fuel reserve from the worst act cost seen in the game (`NN_SKIP_ROUNDS`, `NN_ACT_MARGIN`),
-which took exhaustions from 14 to 1.
+which took exhaustions from 14 to 1. Training the same recipe on all 89 fetched games (876K
+rows, only 36% from winning sides) scored 40-30 (+47), so the 62-game weights are the ones kept;
+the extra games were mostly losses of the top teams, which the loser weighting does not fully
+offset.
 
 ## Map pool
 
