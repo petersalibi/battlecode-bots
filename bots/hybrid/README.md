@@ -66,7 +66,18 @@ size, an aggression byte and the per-body shard stat.
 ## Execution rules worth knowing (`actions.py`, `navigation.py`)
 
 - Fields are rooted on goal tiles and cached for the match; each step is one `next_moves_from` plus
-  occupancy checks, with a reachable-tile fallback when the optimal steps are blocked.
+  occupancy checks, with a reachable-tile fallback when the optimal steps are blocked (a sideways
+  step of equal distance is allowed when it has a free step of its own, so units get walked round).
+- **Camp spawn tiles are walls in every cached field** (`world.static_blocked`), because a route
+  that runs through a living camp leaves the body standing still forever: this cost whole games on
+  collision and rows in v1. Per-turn stepping uses terrain plus visible units (`terrain_blocked`),
+  so a body can still walk onto a cleared group's tiles to capture it, and a body standing on a
+  captured tile steps off it towards the goal. Distances to a group are read at its **anchor**, the
+  walkable tile beside it nearest our spawn, built by `finish_init` over the first few turns within
+  a fuel reserve (`FINISH_INIT_RESERVE`); groups without an anchor are not candidates yet.
+- **Stall guard** (`bot.py`): a body that neither moves nor attacks nor casts for `STUCK_TURNS`
+  turns, while not capturing or holding for allies, drops its target, shuns that group for
+  `HOLD_AVOID_ROUNDS` and logs `stuck`. `tools/run_matches.py` counts those lines per side.
 - Bodies approach camps to a ring beside the spawn tiles and never stand on them once a group is
   cleared: an occupied spawn tile delays the respawn (this deadlocked the whole team before).
 - When the static ring is reached but some camps of the group are dead and the rest out of range, a
@@ -92,9 +103,13 @@ enemy was seen. Draft memory: `HY1` magic, team size, aggression, map class, per
 The worst turns are camp re-rankings with enemies in sight. `vision.camps()` is never called: it
 rebuilds every camp group object on each call. Visible camps go through a static tile table.
 
-## Results so far (vs `starter-python`, release)
+## Results so far (release)
 
-corners 1032-0 (332 rounds), lanes 1008-430 (362 rounds). Mirror matches run clean on both sides.
+`python tools/run_matches.py hybrid hybrid@hybrid-v1` plays the working copy against the tagged v1
+on every map from both sides; a change stays only if it wins more than it loses there. The v1
+baseline against itself (replays/batch/baseline-v1-mirror) was a perfect mirror, 17-17, which also
+showed that the engine is deterministic and that v1 banked under 350 gems from one spawn side on
+collision, eight and rows. Against the starter bot: corners 1032-0, lanes 1008-430.
 
 ## Network hooks
 
@@ -123,5 +138,5 @@ All 17 platform maps run without errors for 300+ rounds.
 - Wards are only dropped during captures. Altar locks and teleport crystals are never bought or used.
 - Ranged champions farm slowly (no move-and-shoot); the draft avoids them where it can.
 - Camp rewards are assumed to split evenly; the lowest ID gets the remainder in reality.
-- No tools yet: `run_matches.py` (batch over maps and sides), `fuel_report.py`, `export_weights.py`,
-  `parity_test.py`.
+- Tools still missing: `fuel_report.py`, `export_weights.py`, `parity_test.py`. The match harness
+  exists (`tools/run_matches.py`).

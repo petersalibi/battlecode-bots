@@ -12,6 +12,8 @@ Python bots for Cambridge Battlecode 2026 (event cambc2026a). The deadline is ar
 - cambc 2.2.5 is installed in `.venv` (excluded locally via `.git/info/exclude`). Use `.\.venv\Scripts\cambc`, or activate with `.\.venv\Scripts\Activate.ps1`.
 - `sdk/` and `cambc.toml` are still 2.1.2, and the runner warns about it. Refreshing with `cambc init` is the team's call.
 - Run a match: `cambc run <botA> <botB> --map <name> --release`. Bot stdout is inside the `.repl26a` replay (a zip): `team-a.stdout`, `team-a.fuel`.
+- Evaluate a change: `python tools/run_matches.py hybrid hybrid@hybrid-v1` plays the working copy against the tagged v1 on every map from both sides (about 35 seconds) and reports wins, gem margins, deaths, fuel and stalls. Keep a change only if it wins there. `name@gitref` exports any tagged version as an opponent.
+- Open a replay: `cambc view <replay> --port 7026`, then the printed link in Firefox (Chrome freezes on this PC).
 
 ## Constraints
 - The runtime is CPython 3.13 in WebAssembly. No NumPy, PyTorch or compiled extensions. Pure Python and the stdlib only.

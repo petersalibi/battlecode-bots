@@ -38,8 +38,6 @@ class Bot:
                 # for one round is cheaper, and the next turn takes the cheap first-turn path.
                 print("init: skipping the first turn's actions, %d fuel left" % fuel.remaining(), flush=True)
                 return
-        if not w.near_ready and self.turns >= 1:
-            w.finish_init()
         w.refresh()
         self.nav.turn_reset()
         after_refresh = fuel.remaining()
@@ -73,6 +71,7 @@ class Bot:
         after_decide = fuel.remaining()
         self.act.run(mode, turn)
         memory_codec.write_claim(w.slot, self.act.status, self.act.claim_group)
+        self._stall_guard(mode)
 
         now = fuel.remaining()
         used = start_fuel - now
@@ -104,3 +103,28 @@ class Bot:
             print("r%d %s: %s hp=%d%% gems=%d gold=%d target=%d enemies=%d fuel_used=%d avg=%d max=%d [%s]" % (
                 w.round, w.kind_name, config.MODE_NAMES[mode], int(w.hp_ratio * 100), w.gems, w.gold, target,
                 len(w.enemies), used, avg, self.fuel_max, self.worst), flush=True)
+        if not w.near_ready:
+            # Leftover fuel builds the group anchors and vision masks, a few groups per turn, after
+            # the turn's actions are safely done (a suspended turn loses its actions).
+            w.finish_init()
+
+    def _stall_guard(self, mode):
+        """A body that neither moves nor acts for STUCK_TURNS turns, without meaning to wait, has
+        hit a pathing hole. Drop its target, shun that group for a while and log it, so the harness
+        can count stalls instead of them silently costing a game."""
+        w, d, act = self.w, self.d, self.act
+        idle = (not w.moved and not act.acted and not act.waiting and not w.at_spawn
+                and mode in (config.FARM, config.CAPTURE, config.TRIBUTE))
+        d.idle_turns = d.idle_turns + 1 if idle else 0
+        if d.idle_turns < config.STUCK_TURNS:
+            return
+        g = d.capture_group if mode == config.CAPTURE else d.target_group
+        print("r%d %s: stuck %d turns in %s at %d,%d gems=%d target=%d" % (
+            w.round, w.kind_name, d.idle_turns, config.MODE_NAMES[mode], w.pos.x, w.pos.y, w.gems,
+            g.index if g is not None else -1), flush=True)
+        if g is not None:
+            g.avoid_until = w.round + config.STUCK_AVOID_ROUNDS
+        d.target_group = None
+        d.capture_group = None
+        d.camp_cache = None
+        d.idle_turns = 0

@@ -27,6 +27,8 @@ class Actions:
         self.status = memory_codec.STATUS_IDLE
         self.claim_group = -1
         self.trace = ""
+        self.acted = False          # attacked or cast this turn
+        self.waiting = False        # standing still on purpose (capturing, holding for allies)
         handler = (self.farm, self.capture, self.tribute, self.recall, self.fight, self.flee)[mode]
         handler(turn)
 
@@ -48,6 +50,7 @@ class Actions:
         except Exception:
             return False
         w.can_cast = False
+        self.acted = True
         if rec.exclusive:
             w.cast_exclusive = True
         return True
@@ -61,6 +64,7 @@ class Actions:
         except Exception:
             return False
         w.can_attack = False
+        self.acted = True
         return True
 
     def _attack_with_reset(self, unit, pos):
@@ -221,6 +225,7 @@ class Actions:
                     d.hold_since = -1
                     return self.farm(turn)
                 self.trace += " holding %d/%d" % (present, d.target_bodies)
+                self.waiting = True
                 return
         d.hold_since = -1
         if targets:
@@ -254,6 +259,7 @@ class Actions:
         self.d.capture_group = g
         if g.tiles.is_set(w.pos):
             # Standing on the region: stay, and hit anything hostile in reach.
+            self.waiting = True
             enemy = self.d.choose_fight_target(turn, w)
             if enemy is not None and enemy.dist <= w.attack_range:
                 self._cast_offensive(enemy.champion, enemy.pos, against_camp=False)

@@ -29,7 +29,9 @@ class Navigator:
     def blocked(self):
         """Tiles we cannot step on this turn: terrain, enemy spawn and every visible unit, minus our own tile."""
         if self._blocked is None:
-            board = (self.w.static_blocked | vision.champion_tiles() | vision.camp_tiles()
+            # Terrain plus visible units: a cleared camp's tiles are walkable (that is how captures
+            # happen) even though every cached field treats camp tiles as walls.
+            board = (self.w.terrain_blocked | vision.champion_tiles() | vision.camp_tiles()
                      | vision.teleport_tiles())
             board.set(self.w.pos, False)
             self._blocked = board
@@ -55,11 +57,14 @@ class Navigator:
         if self._from_me is None or self._from_me_round != self.w.round:
             roots = Bitboard()
             roots.set(self.w.pos)
+            walls = self.w.static_blocked
+            if walls.is_set(self.w.pos):
+                walls = walls & ~roots              # standing on a captured camp's tile
             field = DistanceField()
             if max_distance is None:
-                field.compute(self.w.static_blocked, roots, Bitboard())
+                field.compute(walls, roots, Bitboard())
             else:
-                field.compute(self.w.static_blocked, roots, Bitboard(), max_distance)
+                field.compute(walls, roots, Bitboard(), max_distance)
             self._from_me = field
             self._from_me_round = self.w.round
         return self._from_me
@@ -85,21 +90,40 @@ class Navigator:
         if not w.can_move or w.cast_exclusive:
             return False
         here = field.get(w.pos)
-        if here == 0 or here == W.UNREACHABLE:
+        if here == 0:
             return False
         blocked = self.blocked()
+        if here == W.UNREACHABLE:
+            # Standing on a tile the field treats as a wall (a captured camp's spawn tile): step
+            # off it onto the neighbour nearest the goal.
+            best, best_value = None, W.UNREACHABLE
+            for tile in blocked.reachable_tiles(w.pos, 1).positions():
+                value = field.get(tile)
+                if value < best_value:
+                    best, best_value = tile, value
+            return best is not None and self._move(best)
         # Optimal steps first: one engine call plus a membership test each.
         for delta in field.next_moves_from(w.pos):
             dest = w.pos + delta
             if not blocked.is_set(dest):
                 if self._move(dest):
                     return True
-        # Every optimal step is occupied: take any reachable tile that still improves.
+        # Every optimal step is occupied: take any reachable tile that still improves, or failing
+        # that a sideways tile of equal distance that has a free step of its own (so a body blocked
+        # by a unit walks round it instead of waiting). Never the tile we just left.
         best, best_value = None, here
+        sideways = None
         for tile in blocked.reachable_tiles(w.pos, 1).positions():
             value = field.get(tile)
             if value < best_value:
                 best, best_value = tile, value
+            elif value == here and sideways is None and tile != w.last_pos:
+                for delta in field.next_moves_from(tile):
+                    if not blocked.is_set(tile + delta):
+                        sideways = tile
+                        break
+        if best is None:
+            best = sideways
         return best is not None and self._move(best)
 
     def goto(self, key, goals):

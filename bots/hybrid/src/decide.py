@@ -31,6 +31,7 @@ class Decider:
         self.camp_cache_round = -1000
         self.cache_scored_round = -2000
         self.retargets = 0
+        self.idle_turns = 0           # consecutive turns without a move or an action (bot.py)
 
     # ---- mode ----------------------------------------------------------------------
     def masks(self, w, turn):

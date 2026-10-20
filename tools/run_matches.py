@@ -32,6 +32,7 @@ MAPS = os.path.join(ROOT, "maps")
 
 FUEL_RE = re.compile(rb"\bmax=(\d+)")
 ERROR_RE = re.compile(rb"^bot error", re.M)
+STALL_RE = re.compile(rb"^r\d+ \w+: stuck ", re.M)
 
 
 def find_cambc():
@@ -102,9 +103,9 @@ def team_stdout_stats(bundle, team):
         with zipfile.ZipFile(bundle) as z:
             data = z.read(f"team-{team}.stdout").replace(b"\x00", b"")
     except (OSError, KeyError, zipfile.BadZipFile):
-        return None, 0
+        return None, 0, 0
     peaks = [int(m) for m in FUEL_RE.findall(data)]
-    return (max(peaks) if peaks else None), len(ERROR_RE.findall(data))
+    return (max(peaks) if peaks else None), len(ERROR_RE.findall(data)), len(STALL_RE.findall(data))
 
 
 def read_match(stats_path, bundle, a_is_team_a):
@@ -112,9 +113,10 @@ def read_match(stats_path, bundle, a_is_team_a):
     row = {"finished": False}
     mine, theirs = ("teamA", "teamB") if a_is_team_a else ("teamB", "teamA")
     for side, team in (("a", mine), ("b", theirs)):
-        peak, errors = team_stdout_stats(bundle, "a" if team == "teamA" else "b")
+        peak, errors, stalls = team_stdout_stats(bundle, "a" if team == "teamA" else "b")
         row[f"peak_fuel_{side}"] = peak
         row[f"errors_{side}"] = errors
+        row[f"stalls_{side}"] = stalls
     if not os.path.exists(stats_path):
         return row
     with open(stats_path, encoding="utf-8") as f:
@@ -160,6 +162,8 @@ def print_report(bot_a, bot_b, rows):
         line += f"{thousands(r['peak_fuel_a'], 8)}/{thousands(r['peak_fuel_b'], 5)}"
         if r["errors_a"] or r["errors_b"]:
             line += f"   errors {r['errors_a']}/{r['errors_b']}"
+        if r["stalls_a"] or r["stalls_b"]:
+            line += f"   stalls {r['stalls_a']}/{r['stalls_b']}"
         print(line)
 
     done = [r for r in rows if r["finished"]]
@@ -179,13 +183,14 @@ def print_report(bot_a, bot_b, rows):
         "gems_per_100_rounds_a": rate_a, "gems_per_100_rounds_b": rate_b,
         "deaths_a": sum(r["deaths_a"] for r in done), "deaths_b": sum(r["deaths_b"] for r in done),
         "faults_a": sum(r["faults_a"] for r in done), "exhausted_a": sum(r["exhausted_a"] for r in done),
-        "errors_a": sum(r["errors_a"] for r in rows), "peak_fuel_a": max(peaks) if peaks else None,
+        "errors_a": sum(r["errors_a"] for r in rows), "stalls_a": sum(r["stalls_a"] for r in rows),
+        "peak_fuel_a": max(peaks) if peaks else None,
     }
     print(f"\n{name_a}: {wins}-{losses}-{summary['draws']} ({summary['win_rate']:.0%}) over {len(done)} matches, "
           f"avg gem margin {margin:+.0f}, gems per 100 rounds {rate_a:.1f} vs {rate_b:.1f}")
     print(f"{name_a}: deaths {summary['deaths_a']} (vs {summary['deaths_b']}), faults {summary['faults_a']}, "
           f"fuel exhaustions {summary['exhausted_a']}, logged errors {summary['errors_a']}, "
-          f"peak fuel {thousands(summary['peak_fuel_a'], 1).strip()}K")
+          f"stalls {summary['stalls_a']}, peak fuel {thousands(summary['peak_fuel_a'], 1).strip()}K")
     unfinished = len(rows) - len(done)
     if unfinished:
         print(f"{unfinished} matches did not finish (truncated with --rounds, timed out, or failed)")

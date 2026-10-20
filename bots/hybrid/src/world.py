@@ -31,7 +31,7 @@ _camp_stats = {}          # camp kind -> CampStats, filled on the first turn
 class Group:
     __slots__ = ("index", "group", "handle", "gems", "gold", "respawn", "tiles", "tile_list", "camp_handles",
                  "n_camps", "total_health", "total_strength", "harmless", "state", "timer", "seen_round",
-                 "respawn_round", "value", "near", "kinds", "reachable", "avoid_until")
+                 "respawn_round", "value", "near", "kinds", "reachable", "avoid_until", "anchor")
 
     def __init__(self, index, group):
         self.index = index
@@ -58,6 +58,7 @@ class Group:
             self.kinds.append(kind)
         self.harmless = self.total_strength == 0
         self.near = None          # built by World.finish_init on the second turn
+        self.anchor = None        # walkable tile beside the group nearest our spawn (finish_init)
         self.reachable = True
         self.avoid_until = -1     # round until which this body ignores the group (gave up waiting)
         self.state = UNKNOWN
@@ -161,12 +162,29 @@ class World:
         self.altar_tiles = game_map.altars()
         self.spawn_ally = game_map.spawn_region(Team.ALLY)
         self.spawn_enemy = game_map.spawn_region(Team.ENEMY)
-        self.static_blocked = self.walls | self.holes | self.altar_tiles | self.spawn_enemy
+        # Terrain only: what a single step must avoid (units are added per turn by the navigator).
+        self.terrain_blocked = self.walls | self.holes | self.altar_tiles | self.spawn_enemy
         self.altars = self.altar_tiles.positions()
         self.submit_range = cambc.constants.SUBMIT_GEMS_RANGE
         self.recall_time = cambc.constants.RECALL_TIME
         self.max_rounds = cambc.constants.MAX_ROUNDS
         self.winning_gems = cambc.constants.WINNING_GEMS
+        marks.append(_cambc.fuel_remaining())
+
+        # Camp groups: about 600K fuel, so exactly once.
+        raw_groups = game_map.camp_groups()
+        marks.append(_cambc.fuel_remaining())
+        self.groups = [Group(i, g) for i, g in enumerate(raw_groups)]
+        # Camps stand on their spawn tiles whenever they are alive, which is most of the time, so
+        # every cached route treats them as walls. Otherwise the cheapest path to an altar or to the
+        # next camp runs straight through a monster and the body stands still forever (collision,
+        # rows). Captures walk onto a group's own tiles through fields whose goals are those tiles.
+        camp_tiles = Bitboard()
+        for g in self.groups:
+            camp_tiles |= g.tiles
+        self.camp_tiles = camp_tiles
+        self.static_blocked = self.terrain_blocked | camp_tiles
+        marks.append(_cambc.fuel_remaining())
 
         # Tiles from which an altar can be tributed at.
         goals = Bitboard()
@@ -178,19 +196,15 @@ class World:
         goals &= ~self.static_blocked
         self.altar_goals = goals
 
-        # Static distance fields: turns to the nearest altar approach tile and to our spawn.
+        # Static distance fields: turns to the nearest altar approach tile and to our spawn. The
+        # terrain-only spawn field serves the first turn's target choice, before anchors exist.
         self.altar_field = DistanceField()
         self.altar_field.compute(self.static_blocked, goals, Bitboard())
         self.spawn_field = DistanceField()
         self.spawn_field.compute(self.static_blocked, self.spawn_ally, Bitboard())
+        self.spawn_field_terrain = DistanceField()
+        self.spawn_field_terrain.compute(self.terrain_blocked, self.spawn_ally, Bitboard())
         self._enemy_spawn_field = None       # built on first use (features only)
-        marks.append(_cambc.fuel_remaining())
-
-        # Camp groups: about 600K fuel, so exactly once.
-        raw_groups = game_map.camp_groups()
-        marks.append(_cambc.fuel_remaining())
-        self.groups = [Group(i, g) for i, g in enumerate(raw_groups)]
-        marks.append(_cambc.fuel_remaining())
         self.group_of_camp = {}
         self.camp_at_tile = {}                   # (x, y) -> (Camp, group index); filled by finish_init
         for g in self.groups:
@@ -198,10 +212,10 @@ class World:
                 self.group_of_camp[handle] = g.index
         self.near_ready = False
         if config.LOG_GROUPS:
-            spawn_get = self.spawn_field.get
-            rows = ["g%d k%s at %d,%d gems=%d gold=%d hp=%d str=%d d=%d%s" % (
+            spawn_get = self.spawn_field_terrain.get
+            rows = ["g%d k%s at %d,%d gems=%d gold=%d hp=%d str=%d d=%d" % (
                 g.index, g.kinds, g.tile_list[0].x, g.tile_list[0].y, g.gems, g.gold, int(g.total_health),
-                int(g.total_strength), spawn_get(g.tile_list[0]), "" if g.reachable else " UNREACHABLE")
+                int(g.total_strength), spawn_get(g.tile_list[0]))
                 for g in self.groups]
             print("groups:\n  " + "\n  ".join(rows), flush=True)
 
@@ -232,7 +246,7 @@ class World:
         self.focus = me.focus()
         self.dps = self._estimate_dps()
         marks.append(_cambc.fuel_remaining())
-        self.init_profile = [marks[i] - marks[i + 1] for i in range(len(marks) - 1)]   # fields, groups, Group(), rest
+        self.init_profile = [marks[i] - marks[i + 1] for i in range(len(marks) - 1)]   # map, groups, boards, rest
         self.ready = True
 
     def _estimate_dps(self):
@@ -246,16 +260,39 @@ class World:
         return max(dps, 1.0)
 
     def finish_init(self):
-        """Second-turn setup: work that did not fit in the first turn's budget on big maps."""
+        """Setup that did not fit in the first turn's budget, run at the end of each turn on leftover
+        fuel until every group has its anchor (stops early when fuel runs short, resumes next turn)."""
         spawn_get = self.spawn_field.get
-        for g in self.groups:
+        ring = Bitboard()
+        tmp = Bitboard()
+        here = self.pos
+        # Nearest groups first, so the ones we will farm soonest are candidates soonest.
+        for g in sorted(self.groups, key=lambda g: here.chebyshev_distance(g.tile_list[0])):
+            if g.anchor is not None:
+                continue
+            if _fuel() < config.FINISH_INIT_RESERVE:
+                return
             if g.near is None:
                 g.build_near()
             for camp in g.group.camps():
                 pos = camp.spawn_position()
                 self.camp_at_tile[(pos.x, pos.y)] = (camp, g.index)
-            # Groups we cannot walk to from our spawn (holes, walls) are never candidates.
-            g.reachable = spawn_get(g.tile_list[0]) != UNREACHABLE
+            # The anchor is the walkable tile beside the group nearest our spawn. Camp tiles are
+            # walls in every field, so distances to a group are read at its anchor.
+            ring.clear()
+            for tile in g.tile_list:
+                tmp.clear()
+                tmp.draw_chebyshev(tile, 1)
+                ring |= tmp
+            ring &= ~self.static_blocked
+            best, best_d = None, UNREACHABLE
+            for tile in ring.positions():
+                d = spawn_get(tile)
+                if d < best_d:
+                    best, best_d = tile, d
+            g.anchor = best if best is not None else g.tile_list[0]
+            # Groups we cannot walk to from our spawn (holes, walls, other camps) are never candidates.
+            g.reachable = best is not None
         self.near_ready = True
 
     def first_target(self, claims):
@@ -265,7 +302,7 @@ class World:
                  if slot != self.slot and group_index >= 0}
         budget = self.max_hp * (1 - config.HEALTH_RESERVE)
         best, best_d = None, UNREACHABLE
-        get = self.spawn_field.get
+        get = self.spawn_field_terrain.get        # camps passable: anchors do not exist yet
         for g in self.groups:
             if g.gems <= 0 or g.index in taken:
                 continue
@@ -301,6 +338,7 @@ class World:
             self.claims = memory_codec.read_claims()
             return
 
+        self.last_pos = getattr(self, "pos", None)
         self.pos = me.position()
         self.hp = me.health()
         self.max_hp = me.max_health()

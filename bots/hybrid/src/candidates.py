@@ -74,20 +74,20 @@ class Turn:
         nearest = []
         for g in w.groups:
             state = g.state
-            if not g.reachable or g.avoid_until > round_number:
+            if not g.reachable or g.anchor is None or g.avoid_until > round_number:
                 continue
             if state == W.REWARD and g.seen_round >= recent_reward:
                 continue                                      # already cleared, capture instead
             if state == W.RESPAWNING and g.respawn_round > latest_ok:
                 continue                                      # back too late to matter
-            travel = get(g.tile_list[0])
+            travel = get(g.anchor)                            # camp tiles are walls in the field
             if travel != W.UNREACHABLE:
                 nearest.append((travel, g.index))
         nearest.sort()
         out = []
         for travel, index in nearest[:config.MAX_CAMP_CANDIDATES + 4]:
             g = w.groups[index]
-            travel = max(0, travel - reach)
+            travel = max(0, travel - (reach - 1))             # the anchor is already adjacent
             wait = g.respawn_round - round_number - travel if g.state == W.RESPAWNING else 0
             if wait > config.RESPAWN_WAIT_TURNS:
                 continue
@@ -115,9 +115,12 @@ class Turn:
                                   if slot != w.slot and status == memory_codec.STATUS_CAPTURE}
                 field = self.nav.from_me(config.MAX_CAMP_TURNS)
                 for g in fresh:
-                    travel = min(field.get(t) for t in g.tile_list)
-                    # An ally already on it will finish before we arrive; more bodies do not speed it up.
-                    if travel <= 8 and (travel <= 1 or g.index not in being_captured):
+                    if g.anchor is None or g.avoid_until > w.round:
+                        continue
+                    travel = 0 if g.tiles.is_set(w.pos) else field.get(g.anchor) + 1
+                    # An ally already on it will finish before we arrive; more bodies do not speed it
+                    # up, and a one-tile region has no room for a second body anyway.
+                    if travel <= 8 and (travel == 0 or g.index not in being_captured):
                         out.append((g, travel))
                 out.sort(key=lambda item: item[1])
             self._captures = out
