@@ -91,12 +91,19 @@ def team_matches(team_id, want, min_engine=1, since=None, won_only=False):
 
 
 def download(mid, path):
-    """Download one match zip; returns the match id on failure, None on success."""
-    proc = subprocess.run([CAMBC, "matches", "download", mid, "-o", path], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace")
-    if proc.returncode or not os.path.exists(path):
-        print(f"{mid}: download failed: {proc.stderr.strip()[:200]}")
-        return mid
-    return None
+    """Download one match zip, waiting out the rate limit (downloads are limited too, to a few a
+    second); returns the match id on failure, None on success."""
+    for attempt in range(12):
+        proc = subprocess.run([CAMBC, "matches", "download", mid, "-o", path], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace")
+        if not proc.returncode and os.path.exists(path):
+            return None
+        err = (proc.stderr or "").strip()
+        if "429" not in err and "Rate limit" not in err:
+            break
+        m = re.search(r"retry after (\d+)", err)
+        time.sleep(max(int(m.group(1)) if m else 1, 1) + attempt)
+    print(f"{mid}: download failed: {err[:200]}")
+    return mid
 
 
 def main():
@@ -120,7 +127,7 @@ def main():
     downloaded = 0
     bar = Progress(len(teams), "teams")
     from concurrent.futures import ThreadPoolExecutor
-    pool = ThreadPoolExecutor(4)                     # downloads overlap; listing stays sequential (rate limit)
+    pool = ThreadPoolExecutor(2)                     # two downloads overlap; more just trips the rate limit
     pending = []
     for t in teams:
         bar.step(note=f"{t['name']} ({downloaded} queued)")

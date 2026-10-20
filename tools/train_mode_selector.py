@@ -53,10 +53,14 @@ class ModeNet(nn.Module):
         return self.layers[-1](x)
 
 
-def load(path, holdout_fraction):
+def load(path, holdout_fraction, min_rating=0.0):
     d = np.load(path)
     X = d["X"].astype(np.float32)
     mask, y, reward, match_id = d["mask"], d["y"].astype(np.int64), d["reward"], d["match_id"]
+    strong = np.ones(len(y), dtype=bool)
+    if min_rating > 0 and "rating" in d:
+        strong = d["rating"] >= min_rating
+        print(f"keeping {int(strong.sum())} of {len(strong)} rows from sides rated {min_rating:.0f}+")
     # Hold out whole matches so the test score is not inflated by neighbouring turns.
     ids = np.unique(match_id)
     rng = np.random.default_rng(0)
@@ -68,6 +72,8 @@ def load(path, holdout_fraction):
     legal = mask[np.arange(len(y)), y]
     if not legal.all():
         print(f"dropping {int((~legal).sum())} rows whose label is a masked mode")
+    legal &= strong
+    if not legal.all():
         X, mask, y, reward, test = X[legal], mask[legal], y[legal], reward[legal], test[legal]
         global _LEGAL
         _LEGAL = legal
@@ -250,9 +256,10 @@ def main():
     ap.add_argument("--no-export", action="store_true")
     ap.add_argument("--winners", action="store_true", help="replay data: weight the winning/higher-rated side up")
     ap.add_argument("--loser-weight", type=float, default=0.3)
+    ap.add_argument("--min-rating", type=float, default=0.0, help="replay data: keep only rows of sides rated at least this")
     args = ap.parse_args()
 
-    X, mask, y, reward, test = load(args.data, args.holdout)
+    X, mask, y, reward, test = load(args.data, args.holdout, args.min_rating)
     w = advantage_weights(reward, y, args.beta, args.clip)
     d = np.load(args.data)
     if args.winners and "won" in d:
