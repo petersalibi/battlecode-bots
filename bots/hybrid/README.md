@@ -202,6 +202,21 @@ rows, only 36% from winning sides) scored 40-30 (+47), so the 62-game weights ar
 the extra games were mostly losses of the top teams, which the loser weighting does not fully
 offset.
 
+**Post-patch data (engine 1.0.1, fetched 2026-10-20 evening):** 948 ranked wins of the top 100
+teams from the two hours after the Heart of Ruin nerf, winning sides only (5.7M rows, mean
+rating 1830), in `data/replays/1.0.1/`. None of the models trained on it beat v5:
+
+| Training rows | vs v5 | vs v4 |
+|---|---|---|
+| all 658 games available at the time, winners only | 32-38 (-40) | 42-28 (+54) |
+| those games, sides rated 1800+ (191 games) | 36-34 (+19) | 43-27 (+72) |
+| all 948 games, sides rated 1800+ (479 games) | 28-42 (-14) | 37-33 (+24) |
+
+So v5's recipe (62 games of the top 15 teams, both sides, winners weighted up) still stands, and
+the spread between runs on similar data says a 70-game harness result is only good to about
+plus or minus five games. Selection by rating matters more than volume; a bigger, better set
+would be the top 15 to 25 teams over a longer post-patch window.
+
 ## Map pool
 
 `cambc maps pull` fails with an HTTP 303 from the platform (CLI 2.2.5). The eight maps missing from
