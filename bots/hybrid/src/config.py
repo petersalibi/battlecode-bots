@@ -77,7 +77,9 @@ DATALOG = False             # log features, scores and the chosen mode every tur
 USE_NN_MODE = True          # the mode selector in weights.MODE_SELECTOR decides when it is sure and fuel allows
 USE_NN_CAMP = False
 NN_MIN_MARGIN = 8           # fall back to the script when the top two scores are this close
-NN_FUEL_RESERVE = 1_000_000 # fuel that must remain after a network runs (acting can cost 0.6M)
+NN_FUEL_RESERVE = 1_000_000 # fuel that must remain after a network runs, plus 1.5 map fields (acting can build one)
+NN_SKIP_ROUNDS = 6          # no network while finish_init is still building fields from leftover fuel
+NN_ACT_MARGIN = 300_000     # added to the worst act cost seen when sizing the network's reserve
 
 # ---- Fuel --------------------------------------------------------------------
 FUEL_RESERVE = 250_000      # stop optional work below this much remaining fuel

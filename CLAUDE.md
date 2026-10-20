@@ -9,12 +9,13 @@ Python bots for Cambridge Battlecode 2026 (event cambc2026a). The deadline is ar
 - `bots/fuelbench/RESULTS.md`: measured fuel costs in release builds.
 
 ## Setup
-- cambc 3.0.1 is installed in `.venv` (gitignored). Use `.\.venv\Scripts\cambc`, or activate with `.\.venv\Scripts\Activate.ps1`. `sdk/` and `cambc.toml` match it (refreshed with `cambc init --yes .` on 2026-10-20).
-- cambc 3.0 brought engine 1.0.0 and the week 2 patch (2026-10-20): camp rewards cut hard, kill gold 100, a Golem camp, a twelfth champion (Heart of Ruin), longer camp ranges, and the map pool is now the `00*` and `01*` files (21 maps). `cambc maps pull` works again. The 2.2.5-era maps are kept under `maps/old-2.2.5/` for comparison only. `docs/` was refreshed from the handbook's "Download for LLM" page (https://2026a.battlecode.co.uk/game/docs/agents) the same day; patch notes live at /game/patch-notes.
+- cambc 3.0.2 is installed in `.venv` (gitignored). Use `.\.venv\Scripts\cambc`, or activate with `.\.venv\Scripts\Activate.ps1`. `sdk/` and `cambc.toml` match it (refreshed with `cambc init --yes .` on 2026-10-20).
+- cambc 3.0 brought engine 1.0.0 and the week 2 patch (2026-10-20): camp rewards cut hard, kill gold 100, a Golem camp, a twelfth champion (Heart of Ruin), longer camp ranges, and the map pool is now the `00*` and `01*` files (35 maps since the platform added 14 on 2026-10-20). `cambc maps pull` works again. The 2.2.5-era maps are kept under `maps/old-2.2.5/` for comparison only. `docs/` was refreshed from the handbook's "Download for LLM" page (https://2026a.battlecode.co.uk/game/docs/agents) the same day; patch notes live at /game/patch-notes.
 - Submit: `cambc submit bots/hybrid` (needs `cambc login`, typed by Tyler). Tag the commit `hybrid-vN` to match the submission number.
 - Run a match: `cambc run <botA> <botB> --map <name> --release`. Bot stdout is inside the `.repl26a` replay (a zip): `team-a.stdout`, `team-a.fuel`.
 - Evaluate a change: `python tools/run_matches.py hybrid hybrid@hybrid-v1` plays the working copy against a tagged version on every map from both sides (about 45 seconds for 42 games) and reports wins, gem margins, deaths, fuel exhaustions and stalls. Keep a change only if it wins there, and treat any `exh` as a bug. `name@gitref` exports any tagged version as an opponent.
 - Open a replay: `cambc view <replay> --port 7026`, then the printed link in Firefox (Chrome freezes on this PC).
+- Train on ladder replays: `python tools/fetch_replays.py --teams 15 --per-team 20`, `python tools/replay_dump.py data/replays/raw -o data/replays/ladder --jobs 6`, `python tools/replay_features.py data/replays/ladder --index data/replays/raw/index.json --jobs 10 -o data/ladder_modes.npz`, then `python tools/train_mode_selector.py data/ladder_modes.npz --winners`, `python tools/parity_test.py data/ladder_modes.npz`, and the harness. Needs Node and `python tools/fetch_viewer.py` once per cambc version. See the README's replay section.
 
 ## Constraints
 - The runtime is CPython 3.13 in WebAssembly. No NumPy, PyTorch or compiled extensions. Pure Python and the stdlib only.

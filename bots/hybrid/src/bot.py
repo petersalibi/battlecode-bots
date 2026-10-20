@@ -82,6 +82,8 @@ class Bot:
 
         now = fuel.remaining()
         used = start_fuel - now
+        if after_decide - now > self.d.act_peak:
+            self.d.act_peak = after_decide - now    # the network's reserve must cover the worst act so far
         if config.TRACE_SLOT == w.slot:
             target = self.d.target_group
             raw = len(cambc.vision.camps())

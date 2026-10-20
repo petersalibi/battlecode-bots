@@ -149,9 +149,53 @@ the harness against v4: 23-19, gem margin +123, deaths 481 vs 545, 5 fuel exhaus
 fragment badly (about 240 gems against 850), which the script does not.
 
 The point of this first head is the pipeline: the data is the bot's own play, so the network can
-only re-weight what the script already does. The planned step up is training on other teams'
-platform replays once the replay re-simulation lands. `USE_NN_CAMP` is reserved for the factored
+only re-weight what the script already does. `USE_NN_CAMP` is reserved for the factored
 candidate scorer (not implemented).
+
+### Training on other teams' ladder replays
+
+A platform replay holds the inputs only (draft picks and each champion's actions), so the state
+has to be re-simulated. The visualiser ships the engine as WebAssembly with a timeline API, and
+`tools/` drives it offline:
+
+1. `fetch_replays.py --teams 15 --per-team 20` downloads the finished ranked matches of the top
+   ladder teams with `cambc matches download` and writes `index.json` (map, teams, ratings,
+   results). Needs `cambc login`.
+2. `fetch_viewer.py` copies the engine wasm files and the decoder chunks out of a running
+   `cambc view` into `replays/dev/viewer/` (re-run after a cambc upgrade; the replay's version
+   bytes pick the wasm).
+3. `replay_dump.py <zips or folder> -o data/replays/ladder --jobs 6` runs `replay_dump.mjs`
+   (Node) per replay: it steps the engine one input at a time and, at every state that awaits a
+   champion's input, reads that champion's perspective snapshot (exactly what the SDK would
+   show), its vision buffer, every camp's health and the actions it then took. About a second a
+   game. Seeking to each input instead re-simulates from a checkpoint and takes seven minutes.
+4. `replay_features.py data/replays/ladder --index data/replays/raw/index.json --jobs 10 -o
+   data/ladder_modes.npz` rebuilds `World`, `Turn` and `Decider` from each dump with the SDK
+   stubbed out, runs the bot's own `features.build()` and candidate generation, infers the mode
+   the other team's champion was in from what it did (attack a camp it stood next to, walk toward
+   an altar carrying gems, fight, flee, recall, otherwise farm) and labels the row with the
+   60-round outcome, the side's result and ladder rating. `--check <nnlog>` compares the
+   reconstruction with the bot's own log of the same game: 89% of mode labels and 74% of inputs
+   (within 2) agree, the rest being candidate-ranking details the dump cannot see.
+5. `train_mode_selector.py data/ladder_modes.npz --winners` weights the winning and higher-rated
+   side up, then quantises and exports as before.
+
+The float model trains on inputs scaled to [0, 1], with penalties that keep the legal modes'
+logits centred and small (`--logit-l2`) and with rows whose label the bot's own mask forbids
+dropped (1.4% of ladder rows); the export folds the scaling into the first layer. Without this a
+ladder-trained model produced logits around -8,000 that the int8 export could not resolve (36%
+agreement with the float model, 3-67 against v4). The penalties must act on the legal modes only:
+a masked mode gets no gradient from the loss, so a penalty over all modes is satisfied by pushing
+the masked logits anywhere.
+
+**Ladder model (2026-10-21):** 62 ranked games of the top ladder teams, 587K rows, winning and
+higher-rated sides weighted up; 89.7% agreement with the inferred labels on held-out games, 99.5%
+int8-to-float agreement. Against v4 in the harness: 46-24, gem margin +109, 42.7 gems per 100
+rounds against 36.3, deaths 758 against 1,342, one fuel exhaustion. The own-play model under the
+same bot code scores 39-31 (+25); head to head the two tie 35-35 with the ladder model +86 gems
+and 754 deaths against 1,303. The bot now skips the network for the first six rounds and sizes
+its fuel reserve from the worst act cost seen in the game (`NN_SKIP_ROUNDS`, `NN_ACT_MARGIN`),
+which took exhaustions from 14 to 1.
 
 ## Map pool
 
@@ -175,6 +219,13 @@ fuel budgeting above. Sweep against the v1 tag on the 21-map pool: 31-11.
 
 ## Known gaps
 
+- **01starvation scores nothing.** Holes wall the spawn pocket off; the only walking route to any
+  camp or altar is about 100 turns, beyond `MAX_CAMP_TURNS` (60), so no camp ever qualifies and
+  every body sits on the spawn (v4) or wanders (the network, which the stall guard then logs).
+  Dashes cross holes (the hole strip south of the pocket is one tile wide), so the answer is
+  dash-aware routing, not a bigger search radius: a whole-map search with a soft score floor was
+  tried on 2026-10-21 and lost 29-41 against v4 overall while still scoring 0 there.
+
 - **Deaths.** Down from 14 to 8.5 per side per game after the 2026-10-20 tuning (recall at 50%
   health, no new camp below 45%, kill steals below 40%, and a retreat from camps that would
   finish us: camp deaths fell from 322 to 55 per sweep). What remains is almost all champion
@@ -194,5 +245,5 @@ fuel budgeting above. Sweep against the v1 tag on the 21-map pool: 31-11.
 - Wards are only dropped during captures. Altar locks and teleport crystals are never bought or used.
 - Ranged champions farm slowly (no move-and-shoot); the draft avoids them where it can.
 - Camp rewards are assumed to split evenly; the lowest ID gets the remainder in reality.
-- Tools still missing: `fuel_report.py`, `export_weights.py`, `parity_test.py`. The match harness
-  exists (`tools/run_matches.py`).
+- Tools still missing: `fuel_report.py` (the harness reports peak fuel and exhaustions per match,
+  which has covered the need so far). The weights export lives in `train_mode_selector.py`.

@@ -322,7 +322,7 @@ A working version is in `bots/fuelbench/src/benches.py` (`PackedLayer`), checked
 | `nn.py` | Packed int8 inference engine. |
 | `weights.py` | Generated weights. |
 | `datalog.py` | Debug-build-only decision logger (`config.DATALOG`): features, mask, script scores and the chosen mode per turn, free via `debug_block`. |
-| Tools (not submitted) | `run_matches.py` (harness, `--debug --log-limit` for logging runs), `build_dataset.py` (logs + statistics JSON → features, choices and 60-round outcome labels), `train_mode_selector.py` (outcome-weighted imitation in PyTorch, post-training int8 quantisation, writes `weights.py`), `parity_test.py` (nn.py against a numpy integer reference), `death_report.py` |
+| Tools (not submitted) | `run_matches.py` (harness, `--debug --log-limit` for logging runs), `build_dataset.py` (logs + statistics JSON → features, choices and 60-round outcome labels), `train_mode_selector.py` (outcome-weighted imitation in PyTorch, post-training int8 quantisation, writes `weights.py`), `parity_test.py` (nn.py against a numpy integer reference), `death_report.py`; replay path: `fetch_replays.py` (ladder match zips + index), `fetch_viewer.py` (engine wasm), `replay_dump.py`/`replay_dump.mjs` (re-simulate a replay, dump each champion's perspective per turn), `replay_features.py` (dumps → the bot's own features, inferred mode labels, outcome/result/rating labels) |
 
 ## 13. Open questions
 

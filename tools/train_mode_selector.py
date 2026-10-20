@@ -32,6 +32,9 @@ import config  # noqa: E402
 HIDDEN = (32, 16)
 N_MODES = config.N_MODES
 MASK_NEG = -1e4
+_LEGAL = slice(None)          # rows kept by load(); applied to the extra arrays main() reads
+INPUT_SCALE = 1.0 / 255.0     # the model sees inputs in [0, 1]; the export folds this into the first layer
+CENTER_PENALTY = 1e-3         # keeps the mean logit near zero so int8 scores keep their resolution
 
 
 class ModeNet(nn.Module):
@@ -41,6 +44,7 @@ class ModeNet(nn.Module):
         self.layers = nn.ModuleList(nn.Linear(dims[i], dims[i + 1]) for i in range(len(dims) - 1))
 
     def forward(self, x):
+        x = x * INPUT_SCALE
         for layer in self.layers[:-1]:
             x = F.relu(layer(x))
         return self.layers[-1](x)
@@ -56,6 +60,14 @@ def load(path, holdout_fraction):
     rng.shuffle(ids)
     test_ids = set(ids[: max(1, int(len(ids) * holdout_fraction))].tolist())
     test = np.array([m in test_ids for m in match_id])
+    # Replay data: a label the bot's own mask forbids (an inferred mode with no candidate, for
+    # example capture with no camp in reach) cannot be learnt and only drags the legal logits down.
+    legal = mask[np.arange(len(y)), y]
+    if not legal.all():
+        print(f"dropping {int((~legal).sum())} rows whose label is a masked mode")
+        X, mask, y, reward, test = X[legal], mask[legal], y[legal], reward[legal], test[legal]
+        global _LEGAL
+        _LEGAL = legal
     return X, mask, y, reward, test
 
 
@@ -72,10 +84,10 @@ def advantage_weights(reward, y, beta, clip_hi):
     return np.clip(w, 0.2, clip_hi).astype(np.float32)
 
 
-def train(X, mask, y, w, test, epochs, lr, batch, seed):
+def train(X, mask, y, w, test, epochs, lr, batch, seed, logit_l2=0.0, smoothing=0.0):
     torch.manual_seed(seed)
     net = ModeNet(X.shape[1])
-    opt = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=1e-5)
+    opt = torch.optim.Adam(net.parameters(), lr=lr, weight_decay=1e-4)
     Xt, Mt, yt, wt = (torch.tensor(X[~test]), torch.tensor(mask[~test]), torch.tensor(y[~test]), torch.tensor(w[~test]))
     Xv, Mv, yv = torch.tensor(X[test]), torch.tensor(mask[test]), torch.tensor(y[test])
     n = len(Xt)
@@ -86,17 +98,39 @@ def train(X, mask, y, w, test, epochs, lr, batch, seed):
         total = 0.0
         for i in range(0, n, batch):
             idx = perm[i:i + batch]
-            logits = net(Xt[idx]).masked_fill(~Mt[idx], MASK_NEG)
-            loss = (F.cross_entropy(logits, yt[idx], reduction="none") * wt[idx]).mean()
+            raw = net(Xt[idx])
+            logits = raw.masked_fill(~Mt[idx], MASK_NEG)
+            # Softmax ignores the logits' offset and scale, but int8 export does not: penalise the
+            # mean logit and (optionally) their magnitude, and smooth the labels so noisy ones do
+            # not drive the margins to infinity.
+            # Penalties act on the legal modes only: a masked mode gets no cross-entropy gradient,
+            # so a penalty over all modes would be satisfied by pushing masked logits anywhere.
+            m = Mt[idx]
+            ce = F.cross_entropy(logits, yt[idx], reduction="none", label_smoothing=smoothing)
+            legal = raw.masked_fill(~m, 0.0)
+            count = m.sum(1).clamp(min=1)
+            center = ((legal.sum(1) / count) ** 2).mean()
+            magnitude = ((legal ** 2).sum(1) / count).mean()
+            ce_loss = (ce * wt[idx]).mean()
+            loss = ce_loss + CENTER_PENALTY * center + logit_l2 * magnitude
             opt.zero_grad()
             loss.backward()
             opt.step()
-            total += loss.item() * len(idx)
+            total += ce_loss.item() * len(idx)
         sched.step()
         if epoch % 5 == 0 or epoch == epochs - 1:
-            print(f"epoch {epoch:3d} loss {total / n:.4f} train acc {accuracy(net, Xt, Mt, yt):.3f} "
-                  f"test acc {accuracy(net, Xv, Mv, yv):.3f}")
+            print(f"epoch {epoch:3d} ce {total / n:.4f} train acc {accuracy(net, Xt, Mt, yt):.3f} "
+                  f"test acc {accuracy(net, Xv, Mv, yv):.3f} {logit_stats(net, Xv[:5000])}")
     return net
+
+
+@torch.no_grad()
+def logit_stats(net, X):
+    net.eval()
+    if len(X) == 0:
+        return ""
+    raw = net(X)
+    return f"logits: row mean {raw.mean(1).abs().mean():.1f} row std {raw.std(1).mean():.1f} max {raw.abs().max():.0f}"
 
 
 @torch.no_grad()
@@ -116,8 +150,8 @@ def quantise(net, X_calib):
     net.eval()
     layers = [l for l in net.layers]
     spec_layers = []
-    x = torch.tensor(X_calib)           # raw 0-255 inputs, scale 1.0 per unit
-    in_scale = 1.0                      # float value represented by one input unit
+    x = torch.tensor(X_calib) * INPUT_SCALE   # the model's own input scaling
+    in_scale = INPUT_SCALE              # float value represented by one raw input unit
     with torch.no_grad():
         for index, layer in enumerate(layers):
             W = layer.weight.numpy().astype(np.float64)
@@ -205,6 +239,8 @@ def main():
     ap.add_argument("--holdout", type=float, default=0.15, help="fraction of matches held out")
     ap.add_argument("--margin", type=float, default=0.5, help="logit gap below which the script decides")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--logit-l2", type=float, default=0.0, help="penalty on squared logits (bounds their scale for int8 export)")
+    ap.add_argument("--smoothing", type=float, default=0.0, help="label smoothing")
     ap.add_argument("--no-export", action="store_true")
     ap.add_argument("--winners", action="store_true", help="replay data: weight the winning/higher-rated side up")
     ap.add_argument("--loser-weight", type=float, default=0.3)
@@ -215,13 +251,13 @@ def main():
     d = np.load(args.data)
     if args.winners and "won" in d:
         # Replay data: learn mostly from the side that won (and from the higher-rated side).
-        won = d["won"]; rating = d["rating"]
+        won = d["won"][_LEGAL]; rating = d["rating"][_LEGAL]
         side = np.where(won > 0, 1.0, args.loser_weight).astype(np.float32)
         if (rating > 0).any():
             side *= np.clip(rating / max(rating.max(), 1.0), 0.5, 1.0)
         w = (w * side).astype(np.float32)
     print(f"{len(X)} rows, {X.shape[1]} features, {int(test.sum())} held out; weights mean {w.mean():.2f}")
-    net = train(X, mask, y, w, test, args.epochs, args.lr, args.batch, args.seed)
+    net = train(X, mask, y, w, test, args.epochs, args.lr, args.batch, args.seed, args.logit_l2, args.smoothing)
 
     spec, score_unit = quantise(net, X[~test][:20000])
     # Integer network vs float network agreement on the held-out matches.
