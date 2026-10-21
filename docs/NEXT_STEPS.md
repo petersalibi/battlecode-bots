@@ -110,8 +110,9 @@ Only after 1 and 4, which change what the scorer should learn.
 
 ### 6. Cheap individual gaps
 
-- Teleport crystals and wards are never bought: a crystal at 3 tiles through terrain is a
-  guaranteed escape; a ward on the lane to our farm shows a push before it arrives.
+- Wards are never placed: a ward on the lane to our farm shows a push before it arrives
+  (teammates' views are not shared, so each body only sees its own). Teleport crystals are not an
+  escape: the channel is three owner turn-ends during which the body cannot act (rules, 2026-10-21).
 - Ranged champions (Ren, Vesper Vale, Heart of Ruin) do not kite: a step after each attack.
 - Hooks and corridors from side B fight at a disadvantage: an enemy-side penalty in `score_camp`
   when the enemy spawn is nearer than ours.
