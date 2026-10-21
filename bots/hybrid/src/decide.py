@@ -205,6 +205,7 @@ class Decider:
         return scores
 
     def choose_mode(self, w, turn):
+        self.cur_w = w
         mask = self.masks(w, turn)
         self.last_mask = mask
         self.last_scores = None
@@ -331,7 +332,35 @@ class Decider:
             return FIGHT if w.enemy_within(config.FIGHT_RANGE) else None
         return RECALL
 
+    def should_stand(self, w):
+        """Fleeing from a chaser in reach only gives it free hits (challenge games vs the top ten:
+        70% of our deaths came in flee mode, 5% in fight mode, most in our own half; in lost
+        one-on-ones we were at 73% health against their 87%). Stand and fight when the walk home
+        would most likely kill us anyway, or when our side kills the weakest chaser first."""
+        if not w.enemies or w.at_spawn:
+            return False
+        near = [e for e in w.enemies if e.dist <= config.STAND_CHASE_RANGE]
+        if not near:
+            return False                                        # far enough to get away
+        incoming = 0.0
+        for e in near:
+            incoming += e.strength
+        if incoming <= 0:
+            return False
+        home = w.spawn_field.get(w.pos)
+        escape = min(home if home is not None and home >= 0 else 99, config.STAND_CHASE_TURNS)
+        if incoming * escape >= w.hp * config.STAND_FLEE_DEATH and w.hp_ratio >= config.STAND_FUTILE_MIN_HEALTH:
+            return True                                         # running would not save us
+        side_dps = w.dps
+        for pos, hp, strength, d in w.allies:
+            if d <= config.STAND_ALLY_RANGE and hp > 0:
+                side_dps += strength
+        target = min(near, key=lambda e: e.hp)
+        return target.hp / side_dps <= config.STAND_EDGE * w.hp / incoming
+
     def _set_mode(self, mode, source):
+        if mode == FLEE and config.STAND_GROUND and getattr(self, "cur_w", None) is not None and self.should_stand(self.cur_w):
+            mode, source = FIGHT, source + "+stand"
         if mode == self.mode:
             self.mode_turns += 1
         else:

@@ -467,6 +467,13 @@ class Actions:
             return
         if not moved and nearest.dist <= w.attack_range:
             self._attack_with_reset(nearest.champion, nearest.pos)
+        elif moved and config.FLEE_STRIKE_BACK and not w.is_ranged:
+            # Melee walks and attacks in the same turn: hit a chaser still in reach after the step.
+            pos = w.me.position()
+            for e in w.enemies:
+                if e.pos.chebyshev_distance(pos) <= w.attack_range:
+                    self._attack_with_reset(e.champion, e.pos)
+                    break
 
     def _escape_step(self, threats):
         """The escape head's step: the candidate tile (stand still or a free neighbour) with the
