@@ -142,6 +142,9 @@ class World:
         self.prev_hp = None
         self.enemy_memory = {}         # handle -> (pos, round, hp_ratio)
         self._spawn_centers = None
+        self.contested = None          # byte 6: (group index, rounds old) an enemy was last seen at
+        self.help_calls = set()
+        self.claim_counts = {}
         self.spawn_field_stale = False     # navigation.seal_holes: rebuild the spawn field when affordable
         self.waiting_dash = False          # set by the navigator when a hole crossing waits on the dash cooldown
         self.last_enemy_round = -10_000
@@ -460,6 +463,8 @@ class World:
         if profiling:
             marks.append(_fuel())
         self.claims = memory_codec.read_claims()
+        self.contested = memory_codec.read_contested(self.round)
+        self._index_claims()
         if profiling:
             marks.append(_fuel())
             self.refresh_profile = [marks[i] - marks[i + 1] for i in range(len(marks) - 1)]
@@ -484,7 +489,7 @@ class World:
                 self.events.add("enemy_appeared")
             self.last_enemy_round = self.round
             self.last_enemy_pos = self.nearest_enemy.pos
-            memory_codec.write_enemy_seen(self.round)
+            pass
         # Enemies remembered at low health that vanished next to us probably died.
         for handle, (pos, seen, ratio) in list(self.enemy_memory.items()):
             if seen == self.round - 1 and ratio < 0.12 and pos.chebyshev_distance(self.pos) <= 2 \
@@ -638,6 +643,23 @@ class World:
         except Exception:
             pass
         self.capture_rounds_left = max(0, config.CAPTURE_TURNS - decider.mode_turns) if decider.mode == config.CAPTURE else 0
+
+    def _index_claims(self):
+        """Once per turn: the groups allies are holding at for help, and how many allies name
+        each group (score_camp asks per candidate, so this must not loop over the board there)."""
+        self.help_calls = set()
+        self.claim_counts = {}
+        for slot, (status, claimed) in enumerate(self.claims):
+            if slot != self.slot and claimed >= 0:
+                self.claim_counts[claimed] = self.claim_counts.get(claimed, 0) + 1
+                if status == memory_codec.STATUS_IDLE and not self.help_calls:
+                    self.help_calls.add(claimed)      # one live call per team: the lowest slot's
+
+    def help_called(self, group_index):
+        return group_index in self.help_calls
+
+    def ally_claims(self, group_index):
+        return self.claim_counts.get(group_index, 0)
 
     def allies_near(self, tile, distance):
         """Visible allies within distance of a tile (from the last ally scan)."""

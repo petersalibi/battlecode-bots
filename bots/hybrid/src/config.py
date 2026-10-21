@@ -60,7 +60,19 @@ RESPAWN_WAIT_TURNS = 6      # accept arriving this many turns before a camp resp
 MAX_HELPERS = 3             # plan on at most this many allies joining a camp we cannot solo
 HELP_DISCOUNT = 0.8         # score multiplier for plans that depend on allies turning up
 HELP_WAIT_RANGE = 4         # allies within this distance of the camp count as present
-HOLD_MAX_TURNS = 25         # give up waiting for allies after this long ...
+HOLD_MAX_TURNS = 25         # give up waiting for allies after this long (three times that if someone has answered) ...
+# Cooperation through the claims board (no extra bytes): a holder posts IDLE with its group as a call
+# for help, helpers score that group up, and byte 6 names the group an enemy was last seen at.
+COOP = True
+HELP_CALL_BONUS = 1.6       # score multiplier for a group an ally is holding at for help ...
+HELP_CALL_MAX_TRAVEL = 25   # ... when it is within this many walking turns
+LOG_HELP = True             # print a line when a body answers a call (cheap: once per retarget)
+CONTEST_SHARE = False       # post the group an enemy is seen at (bot.py; off: alone it cost 63 gems a game vs v11) ...
+CONTEST_RANGE = 6           # ... when the enemy is within this of us ...
+CONTEST_NEAR = 8            # ... and we are within this of the group's anchor
+CONTEST_MEMORY = 64         # rounds a contested mark counts
+CONTEST_SOLO_FACTOR = 1.0   # a contested group scores this much for a lone body ...
+CONTEST_PAIR_BONUS = 1.0    # ... and this much more once an ally is on it
 HOLD_AVOID_ROUNDS = 60      # ... and leave that group alone for this long
 MIN_CAMP_SCORE = 0.05
 RETARGET_EVERY = 10         # re-rank camps at least this often while farming

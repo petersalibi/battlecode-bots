@@ -232,12 +232,19 @@ class Actions:
             if present < d.target_bodies:
                 if d.hold_since < 0:
                     d.hold_since = w.round
-                elif w.round - d.hold_since > config.HOLD_MAX_TURNS:
-                    # Nobody came. Leave this group alone for a while and pick something else.
+                elif w.round - d.hold_since > config.HOLD_MAX_TURNS and not (config.COOP and w.ally_claims(g.index)):
+                    # Nobody came (and nobody is on the way). Leave this group alone for a while.
                     g.avoid_until = w.round + config.HOLD_AVOID_ROUNDS
                     d.target_group = None
                     d.hold_since = -1
                     return self.farm(turn)
+                elif w.round - d.hold_since > config.HOLD_MAX_TURNS * 2:
+                    g.avoid_until = w.round + config.HOLD_AVOID_ROUNDS
+                    d.target_group = None
+                    d.hold_since = -1
+                    return self.farm(turn)
+                if config.COOP:
+                    self.status = memory_codec.STATUS_IDLE          # the call for help on the claims board
                 self.trace += " holding %d/%d" % (present, d.target_bodies)
                 self.waiting = True
                 return

@@ -81,6 +81,10 @@ class Bot:
                                                         prev_mode, prev_turns))
         after_decide = fuel.remaining()
         self.d.review_cost = 0
+        if config.CONTEST_SHARE and w.enemies and w.nearest_enemy.dist <= config.CONTEST_RANGE:
+            g = self.d.capture_group if mode == config.CAPTURE else self.d.target_group
+            if g is not None and g.anchor is not None and w.pos.chebyshev_distance(g.anchor) <= config.CONTEST_NEAR:
+                memory_codec.write_contested(g.index, w.round)
         self.act.run(mode, turn)
         memory_codec.write_claim(w.slot, self.act.status, self.act.claim_group)
         self._stall_guard(mode)

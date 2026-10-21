@@ -15,7 +15,7 @@ Team = cambc.Team
 
 
 class CampCandidate:
-    __slots__ = ("group", "travel", "clear_turns", "damage", "wait", "claimed", "score", "bodies")
+    __slots__ = ("group", "travel", "clear_turns", "damage", "wait", "claimed", "score", "bodies", "helping")
 
     def __init__(self, group, travel, clear_turns, damage, wait, claimed):
         self.group = group
@@ -26,6 +26,7 @@ class CampCandidate:
         self.claimed = claimed
         self.score = 0.0
         self.bodies = 1 + claimed     # champions the plan assumes on the group, set by the scorer
+        self.helping = False          # set by the scorer when this is an answer to an ally's call
 
 
 RECOMPUTE_EVENTS = {"camp_cleared", "capture_finished", "gems_gained", "gems_lost", "enemy_appeared", "big_damage"}
@@ -66,7 +67,7 @@ class Turn:
         get = field.get
         claimed_groups = {}
         for slot, (status, group_index) in enumerate(w.claims):
-            if slot != w.slot and group_index >= 0 and status in (memory_codec.STATUS_FARM, memory_codec.STATUS_CAPTURE):
+            if slot != w.slot and group_index >= 0 and status in (memory_codec.STATUS_FARM, memory_codec.STATUS_CAPTURE, memory_codec.STATUS_IDLE):
                 claimed_groups[group_index] = claimed_groups.get(group_index, 0) + 1
         reach = w.attack_range
         recent_reward = round_number - 30

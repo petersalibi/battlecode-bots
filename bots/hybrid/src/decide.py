@@ -47,6 +47,7 @@ class Decider:
         self.was_alive = True
         self.camp_source = "script"   # who ranked the camps at the last retarget
         self.gated_since = -1         # round the spawn gate started holding this body, or -1
+        self.helping_group = None     # the group whose call for help this body answered
         self.explore_mode = FARM      # self-play exploration: the mode being held and until when
         self.explore_until = -1
         self.risk_score = None        # the selector's death-risk lane this turn (None when it did not run)
@@ -388,7 +389,18 @@ class Decider:
                 enemy_field = w.enemy_spawn_field()
                 if enemy_field is not None and enemy_field.get(g.anchor) < w.spawn_field.get(g.anchor):
                     score *= config.CAMP_ENEMY_SIDE_FACTOR
-        if cand.claimed and not needs_help:
+        if config.COOP:
+            if cand.travel <= config.HELP_CALL_MAX_TRAVEL and w.help_called(g.index) and cand.claimed < cand.bodies:
+                # An ally is holding there for help and the plan is still short of bodies: answer
+                # it (within a walk that arrives before the hold runs out, and never more
+                # helpers than the camp needs: 24 answered calls a game stacked everyone there).
+                score *= config.HELP_CALL_BONUS
+                cand.helping = True
+            contested = w.contested
+            if contested is not None and contested[0] == g.index and contested[1] <= config.CONTEST_MEMORY:
+                # An enemy was seen at this group lately: not a solo trip; a pair is fine.
+                score *= config.CONTEST_PAIR_BONUS if cand.claimed else config.CONTEST_SOLO_FACTOR
+        if cand.claimed and not needs_help and not (config.COOP and w.help_called(g.index)):
             score *= config.CLAIMED_PENALTY                           # do not stack on an easy camp
         if self.target_group is not None and g.index == self.target_group.index:
             score *= 1.15                                             # finish what we started
@@ -421,6 +433,18 @@ class Decider:
                 best = cand
         self.retargets += 1
         self.camp_source = "script"
+        if config.COOP and self.helping_group is not None:
+            # Committed to a call: keep it while the group is still a candidate and someone still
+            # claims it (helpers that bounced between four holders' calls never cleared any).
+            kept = next((c for c in cands if c.score > config.MIN_CAMP_SCORE and c.group.index == self.helping_group), None)
+            if kept is not None and (w.help_called(self.helping_group) or w.ally_claims(self.helping_group)):
+                best = kept
+            else:
+                self.helping_group = None
+        if best is not None and getattr(best, "helping", False) and self.helping_group != best.group.index:
+            self.helping_group = best.group.index
+            if config.LOG_HELP:
+                print("r%d %s: answering the call at g%d (travel %d)" % (w.round, w.kind_name, best.group.index, best.travel), flush=True)
         allowed = [cand.score > config.MIN_CAMP_SCORE for cand in cands]
         if self.net_target is not None:
             kept = next((cand for index, cand in enumerate(cands) if allowed[index] and cand.group.index == self.net_target), None)

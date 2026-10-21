@@ -212,6 +212,16 @@ class OfflineWorld:
     recall_time = 5
     max_rounds = 2000
     team_deaths = {}          # the bot's claims-board death memory; not reconstructed offline
+    contested = None          # byte 6 (contested group): not reconstructed offline
+
+    help_calls = set()
+    claim_counts = {}
+
+    def help_called(self, group_index):
+        return any(status == memory_codec.STATUS_IDLE and claimed == group_index for status, claimed in self.claims)
+
+    def ally_claims(self, group_index):
+        return sum(1 for status, claimed in self.claims if claimed == group_index)
 
     def __init__(self, st, turn, tracker, team_sizes, prev_mode):
         s = turn["state"]

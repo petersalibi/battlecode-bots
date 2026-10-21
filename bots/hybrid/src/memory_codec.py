@@ -3,7 +3,10 @@
 Shared memory (8 bytes, read/write all match):
     bytes 0-5   one claim byte per ally body, indexed by the body's position in cambc.champions(ALLY)
                 bits 7-6: status (STATUS_*), bits 5-0: claimed camp group index + 1 (0 = none)
-    byte 6      low byte of the round an enemy was last seen by anyone (0 = never)
+    byte 6      contested group: bits 5-0 the group index + 1 an enemy was last seen near (0 = none),
+                bits 7-6 the epoch (round // 32 mod 4) it was seen, so readers know how stale it is
+    A claim of STATUS_IDLE with a group is a call for help: the body is holding at a camp it
+    cannot clear alone, waiting for allies (actions.farm); helpers score that group up.
     byte 7      break-out signal: bit 7 set, bits 6-0 the round (mod 128) a gated body decided the
                 team leaves spawn together (0 = none)
 
@@ -41,12 +44,33 @@ def write_claim(slot, status, group_index):
         cambc.shared_memory[slot] = encode_claim(status, group_index)
 
 
-def write_enemy_seen(round_number):
-    cambc.shared_memory[6] = round_number & 0xFF
+CONTEST_EPOCH = 32
+
+
+def write_contested(group_index, round_number):
+    """An enemy is near this camp group: byte 6 carries the group and the epoch it was seen."""
+    if 0 <= group_index <= 62:
+        cambc.shared_memory[6] = (group_index + 1) | (((round_number // CONTEST_EPOCH) & 3) << 6)
+
+
+def read_contested(round_number):
+    """(group index, rounds old at most) of the last contested group, or None."""
+    value = cambc.shared_memory[6]
+    group = (value & 63) - 1
+    if group < 0:
+        return None
+    epochs_ago = ((round_number // CONTEST_EPOCH) - (value >> 6)) & 3
+    if epochs_ago >= 3:
+        return None                                   # too stale to tell from a wrap-around
+    return group, epochs_ago * CONTEST_EPOCH + (round_number % CONTEST_EPOCH)
+
+
+def write_enemy_seen(round_number):           # kept for callers; byte 6 now holds the contested group
+    pass
 
 
 def read_enemy_seen():
-    return cambc.shared_memory[6]
+    return 0
 
 
 def write_breakout(round_number):
@@ -108,5 +132,6 @@ def default_plan():
 
 
 __all__ = ["STATUS_IDLE", "STATUS_FARM", "STATUS_CAPTURE", "STATUS_BUSY", "read_claims", "write_claim",
-           "write_enemy_seen", "read_enemy_seen", "write_breakout", "breakout_age", "encode_plan", "decode_plan",
+           "write_enemy_seen", "read_enemy_seen", "write_contested", "read_contested", "write_breakout", "breakout_age",
+           "encode_plan", "decode_plan",
            "default_plan", "config"]
