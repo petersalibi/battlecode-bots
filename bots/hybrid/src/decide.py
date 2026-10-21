@@ -294,6 +294,17 @@ class Decider:
             score *= config.CLAIMED_PENALTY                           # do not stack on an easy camp
         if self.target_group is not None and g.index == self.target_group.index:
             score *= 1.15                                             # finish what we started
+        if config.DEATH_MEMORY and self.deaths:
+            rounds = self.deaths.get(g.index)
+            if rounds:
+                recent = 0
+                for r in rounds:
+                    if w.round - r <= config.DEATH_MEMORY_ROUNDS:
+                        recent += 1
+                if recent >= config.DEATH_MEMORY_DROP:
+                    score = 0.0                                       # we keep dying there: not a candidate
+                elif recent:
+                    score *= config.DEATH_MEMORY_FACTOR ** recent
         cand.score = score
         return score
 
