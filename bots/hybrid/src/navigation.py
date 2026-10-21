@@ -138,6 +138,8 @@ class Navigator:
                     self.hole_failures = 0
                     self.seal_holes(field)
                     return False
+            else:
+                w.waiting_dash = True                 # the stall guard leaves a body waiting on its dash alone
         # Every optimal step is occupied: take any reachable tile that still improves, or failing
         # that a sideways tile of equal distance that has a free step of its own (so a body blocked
         # by a unit walks round it instead of waiting). Never the tile we just left.
@@ -173,6 +175,20 @@ class Navigator:
             if best_key is None or key > best_key:
                 best, best_key = tile, key
         return best is not None and best != w.pos and self._move(best)
+
+    def hole_ahead(self, field, steps):
+        """True when the field's descent from here reaches a thin hole within `steps` moves (one
+        engine call per step)."""
+        w = self.w
+        pos = w.pos
+        for _ in range(steps):
+            moves = field.next_moves_from(pos)
+            if not moves:
+                return False
+            pos = pos + moves[0]
+            if w.thin_holes.is_set(pos):
+                return True
+        return False
 
     def dash_ready(self):
         """A dash ability off cooldown, with a cast still available this turn."""
@@ -210,6 +226,8 @@ class Navigator:
         standing still)."""
         w = self.w
         if not w.can_cast or w.cast_exclusive:
+            return False
+        if min_gain >= 2 and config.DASH_SAVE_STEPS and w.has_dash and not w.thin_holes.is_empty()                 and self.hole_ahead(field, config.DASH_SAVE_STEPS):
             return False
         for rec in w.abilities:
             if not rec.is_dash:

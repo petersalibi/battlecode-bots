@@ -132,7 +132,7 @@ class Bot:
         hit a pathing hole. Drop its target, shun that group for a while and log it, so the harness
         can count stalls instead of them silently costing a game."""
         w, d, act = self.w, self.d, self.act
-        idle = (not w.moved and not act.acted and not act.waiting and not w.at_spawn
+        idle = (not w.moved and not act.acted and not act.waiting and not w.at_spawn and not w.waiting_dash
                 and mode in (config.FARM, config.CAPTURE, config.TRIBUTE))
         d.idle_turns = d.idle_turns + 1 if idle else 0
         if d.idle_turns < config.STUCK_TURNS:

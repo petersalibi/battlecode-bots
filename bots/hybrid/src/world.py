@@ -143,6 +143,7 @@ class World:
         self.enemy_memory = {}         # handle -> (pos, round, hp_ratio)
         self._spawn_centers = None
         self.spawn_field_stale = False     # navigation.seal_holes: rebuild the spawn field when affordable
+        self.waiting_dash = False          # set by the navigator when a hole crossing waits on the dash cooldown
         self.last_enemy_round = -10_000
         self.last_enemy_pos = None
         self.enemies_killed = []       # rounds at which an enemy was seen to die
@@ -389,6 +390,7 @@ class World:
             self.spawn_field = field
         self.events = set()
         self.moved = False
+        self.waiting_dash = False
         self.cast_exclusive = False
         self.round = cambc.round_number()
         state = me.state()

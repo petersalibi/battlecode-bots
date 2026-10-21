@@ -132,6 +132,18 @@ spawn tile furthest from the campers. Mirror: 34-36 against v7 (deaths 1103 vs 1
 against v6; the problem maps (swirl, elk arena, collision, packs, hooks) 6-4 with +98 gems and
 deaths 241 vs 301.
 
+### Dash maps: stalls (2026-10-21, v10)
+
+Islands, concentrated wealth and fracture logged 36 to 51 stalled bodies a game. Dumps showed
+three shapes: a body in a wide hole field crossing one thin hole per dash cooldown and idling
+between, bodies walled off from an embedded group by another group's camps, and a body standing
+at a group it had already cleared. Three fixes: `DASH_SAVE_STEPS` (no speed-up dash when the
+route crosses a thin hole within six steps, so the dash is ready at the hole), waiting on the dash
+cooldown at a hole no longer counts as a stall, and a body that cannot step towards its group
+hits whatever camp is in range (`clearing` in the trace). Islands stalls 40 to 1-3 a game,
+concentrated wealth and fracture roughly halved. Sweeps: 40-30 (+29 gems) against v9 and 43-27
+(+95, deaths 1093 vs 1210) against v8.
+
 ## Team memory (`memory_codec.py`)
 
 Shared memory: one claim byte per body (2-bit status, 6-bit group index), byte 6 the last round an
