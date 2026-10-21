@@ -107,14 +107,17 @@ def _map_info():
     groups = game_map.camp_groups()
     info.n_groups = len(groups)
     camp_tiles = Bitboard()
-    camp_list = []
+    camp_list = []                       # one tile per group: the counts below are groups in reach
     for group in groups:
         info.total_gems += group.gem_value()
         info.total_gold += group.gold_value()
+        first = True
         for camp in group.camps():
             pos = camp.spawn_position()
             camp_tiles.set(pos, True)
-            camp_list.append(pos)
+            if first:
+                camp_list.append(pos)
+                first = False
             kind = camp._type
             if 0 <= kind < draft_features.N_KINDS:
                 info.kind_counts[kind] += 1
@@ -124,18 +127,15 @@ def _map_info():
     field.compute(blocked, ours, Bitboard(), 61)
 
     def camps_within(fld, limit):
+        # Groups whose first camp has a cardinal neighbour within `limit` walking turns: four
+        # field reads per group, about 0.5M on the biggest maps (eight per camp was 7M).
         n = 0
         for pos in camp_list:
-            for dx in (-1, 0, 1):
-                for dy in (-1, 0, 1):
-                    if dx or dy:
-                        x, y = pos.x + dx, pos.y + dy
-                        if 0 <= x < W and 0 <= y < H and fld.get(Vec2(x, y)) <= limit:
-                            n += 1
-                            break
-                else:
-                    continue
-                break
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                x, y = pos.x + dx, pos.y + dy
+                if 0 <= x < W and 0 <= y < H and fld.get(Vec2(x, y)) <= limit:
+                    n += 1
+                    break
         return n
     info.camps_within_30 = camps_within(field, 30)
     info.camps_within_60 = camps_within(field, 60)
@@ -196,10 +196,13 @@ def _map_features():
             return previous["map_features"]
     except Exception:
         pass
+    if not (config.USE_NN_DRAFT or config.USE_NN_DRAFT_VALUE or config.DRAFT_LOG_FEATURES):
+        return None
     if _cambc.fuel_remaining() < config.DRAFT_HEAD_FUEL:
         return None
     try:
         feats = draft_features.map_part(_map_info())
+        print("draft: map features done, %d fuel left" % _cambc.fuel_remaining(), flush=True)
         print("draftlog pick=0 map=%s" % "".join("%02x" % v for v in feats), flush=True)
         return feats
     except Exception as error:
@@ -230,6 +233,26 @@ def _explore_pick(available, chosen):
             return None
         return allowed[rnd() % len(allowed)]
     except Exception:
+        return None
+
+
+def _value_pick(available, map_feats, chosen):
+    """Greedy pick by the draft value head: the allowed champion whose addition to the picks so
+    far gives the highest predicted gem margin for the full composition."""
+    net = weights.DRAFT_VALUE if config.USE_NN_DRAFT_VALUE else None
+    if net is None or map_feats is None:
+        return None
+    try:
+        size = cambc.draft.team_size()
+        allowed = [getattr(Draft, n) for n in config.DRAFT_ALLOWED if getattr(Draft, n, None) in available]
+        best, best_value = None, None
+        for pick in allowed:
+            value = net.forward(draft_features.build(map_feats, list(chosen) + [pick], size))[0]
+            if best is None or value > best_value:
+                best, best_value = pick, value
+        return best
+    except Exception as error:
+        print(f"draft: value head failed: {error!r}", flush=True)
         return None
 
 
@@ -296,6 +319,9 @@ def play():
     # Lock in a pick first, then spend the remaining fuel on the plan.
     pick = _explore_pick(available, chosen)
     source = "random"
+    if pick is None:
+        pick = _value_pick(available, map_feats, chosen)
+        source = "value"
     if pick is None:
         pick = _net_pick(available, map_feats, chosen)
         source = "head"

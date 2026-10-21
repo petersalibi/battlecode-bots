@@ -144,7 +144,8 @@ N_DRAFT_PICKS = 12          # ChampionDraft values 0..11 (Cassi & Issac are one 
 USE_NN_DRAFT = False        # the draft head in weights.DRAFT_HEAD picks from the map (draft._net_pick)
 DRAFT_RANDOM = 0.0          # self-play exploration: probability each pick is a random allowed champion (data runs only, never submitted)
 DRAFT_RANDOM_SALT = 0       # varies per exploration sweep so the same map draws different drafts
-DRAFT_HEAD_FUEL = 8_000_000 # the map features (four fields and the camp groups) need this much in hand: first draft turn only
+DRAFT_HEAD_FUEL = 8_000_000 # the map features need this much in hand (measured 3.2M on corners, 5.1M on big-world and islands): first draft turn only
+DRAFT_LOG_FEATURES = False  # compute and log the map features even with every draft head off (parity checks)
 # Champions the script can play; the draft head never picks outside this set.
 DRAFT_ALLOWED = ("VENDETTA", "MARCELLA", "RYTH", "VARG", "VESPER_VALE", "HEART_OF_RUIN", "REN", "WILLOW", "TAVI", "CASSI_AND_ISSAC")
 # Champions whose dash crosses holes, first on maps where holes wall the camps off (starvation,

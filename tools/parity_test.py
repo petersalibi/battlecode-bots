@@ -78,7 +78,8 @@ def main():
              ("CAMP_SCORER", weights.CAMP_SCORER, weights.CAMP_SCORER_SPEC),
              ("ESCAPE_HEAD", getattr(weights, "ESCAPE_HEAD", None), getattr(weights, "ESCAPE_HEAD_SPEC", None)),
              ("FIGHT_HEAD", getattr(weights, "FIGHT_HEAD", None), getattr(weights, "FIGHT_HEAD_SPEC", None)),
-             ("DRAFT_HEAD", getattr(weights, "DRAFT_HEAD", None), getattr(weights, "DRAFT_HEAD_SPEC", None))]
+             ("DRAFT_HEAD", getattr(weights, "DRAFT_HEAD", None), getattr(weights, "DRAFT_HEAD_SPEC", None)),
+             ("DRAFT_VALUE", getattr(weights, "DRAFT_VALUE", None), getattr(weights, "DRAFT_VALUE_SPEC", None))]
     for name, net, spec in heads:
         if net is None:
             print(f"{name}: no weights")

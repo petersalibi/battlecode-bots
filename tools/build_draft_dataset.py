@@ -88,10 +88,15 @@ def map_info(static, side):
     walk = {(x, y) for x in range(W) for y in range(H)} - blocked
     field = bfs(W, H, blocked, ours, 61)
 
+    firsts = {}
+    for c in static["camps"]:
+        firsts.setdefault(c["group"], (c["x"], c["y"]))
+
     def camps_within(dist, limit):
+        # Groups whose first camp has a cardinal neighbour within `limit`, as the draft counts them.
         n = 0
-        for (x, y) in camps:
-            for dx, dy in NEIGHBOURS:
+        for (x, y) in firsts.values():
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                 if dist.get((x + dx, y + dy), 10 ** 9) <= limit:
                     n += 1
                     break
