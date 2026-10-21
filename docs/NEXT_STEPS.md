@@ -171,6 +171,12 @@ Rotation plans for contest, boss_battle, gold_rush, elk_arena, stampede and rush
 for tributes, and shared fights. The claims board already carries per-body status and group; it
 needs a planner that assigns rather than one that only reports.
 
+## Tuning sweeps that changed nothing (2026-10-21 night, all restored)
+
+Selector override margin 0.25 and 1.0 logits (level), retarget every 15 turns (level,
+exhaustions unchanged), `FLEE_POWER_RATIO` 0.85 (30-40 vs v11). The mirror's floor is about
+plus or minus four wins; none of these cleared it.
+
 ## Process
 
 - Evaluate against both v5 and v6 (`python tools/run_matches.py hybrid hybrid@hybrid-v6`).
