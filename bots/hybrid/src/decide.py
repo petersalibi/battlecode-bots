@@ -211,6 +211,13 @@ class Decider:
                 return self._set_mode(FLEE, "rule")
         if not w.at_spawn and self.camp_hitting(w) and w.hp_ratio < config.FLEE_HEALTH:
             return self._set_mode(FLEE, "rule")                       # a camp is finishing us off
+        if config.OUTNUMBERED_RULE and not w.at_spawn and len(w.enemies) >= 2                 and w.enemy_within(config.FLEE_ENEMY_RANGE + config.FLEE_GROUP_EXTRA):
+            # Outnumbered by a stronger group: run, and keep running while they are in sight
+            # (elk arena on the ladder: full-health bodies flipped from flee to capture with three
+            # enemies beside them and died within five turns). A hard rule, above the network.
+            balance = w.power_balance()
+            if balance < config.FLEE_POWER_RATIO or (self.mode == FLEE and balance < config.OUTNUMBERED_STAY_BALANCE):
+                return self._set_mode(FLEE, "rule")
         # Spawn camping (elk arena on the ladder: 79 deaths, most within 8 turns of our spawn at
         # full health, three enemies in sight): the spawn heals and enemies cannot enter it, so a
         # body that would walk out into a stronger group stays until it has left or allies are up.

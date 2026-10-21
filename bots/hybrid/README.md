@@ -136,6 +136,13 @@ windows, but against stronger teams (rank 363-402) swirl, collision and elk aren
 to 56 deaths a game: full-health bodies flip from flee to capture with three to five enemies
 beside them and die within five turns.
 
+**v11: outnumbered rule.** Two or more enemies within eight tiles and our local power below
+`FLEE_POWER_RATIO` times theirs: flee as a hard rule above the network, and keep fleeing while
+they are in sight and our power is still below theirs (`OUTNUMBERED_RULE`,
+`OUTNUMBERED_STAY_BALANCE`). The ladder losses above were full-health bodies flipping from flee
+to capture beside three to five enemies. Mirror: 38-32 (+18) against v10 with deaths 940 vs 1187,
+35-35 against v9 with deaths 958 vs 1071.
+
 ### Dash maps: stalls (2026-10-21, v10)
 
 Islands, concentrated wealth and fracture logged 36 to 51 stalled bodies a game. Dumps showed
