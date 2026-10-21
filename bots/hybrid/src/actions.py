@@ -212,6 +212,12 @@ class Actions:
                 self.nav.step_along(w.spawn_field)
             return
         self.claim_group = g.index
+        # Farming alone with a stronger enemy close: ask for a partner instead of leaving the camp
+        # (the same call as a hold; a lone body that avoided contested camps handed them over).
+        if (config.COOP and config.PAIR_CALL and w.enemies and w.nearest_enemy.dist <= config.CONTEST_RANGE
+                and w.power_balance() < config.PAIR_CALL_BALANCE and w.allies_near(w.pos, config.HELP_WAIT_RANGE) == 0
+                and g.anchor is not None and w.pos.chebyshev_distance(g.anchor) <= config.CONTEST_NEAR):
+            self.status = memory_codec.STATUS_IDLE
 
         # An enemy in reach that is hitting us gets the basic attack; the camp still gets abilities.
         if w.damage_taken > 0 and w.hp_ratio > config.FLEE_HEALTH:

@@ -390,7 +390,7 @@ class Decider:
                 if enemy_field is not None and enemy_field.get(g.anchor) < w.spawn_field.get(g.anchor):
                     score *= config.CAMP_ENEMY_SIDE_FACTOR
         if config.COOP:
-            if cand.travel <= config.HELP_CALL_MAX_TRAVEL and w.help_called(g.index) and cand.claimed < cand.bodies:
+            if cand.travel <= config.HELP_CALL_MAX_TRAVEL and w.help_called(g.index) and cand.claimed < max(cand.bodies, 2):
                 # An ally is holding there for help and the plan is still short of bodies: answer
                 # it (within a walk that arrives before the hold runs out, and never more
                 # helpers than the camp needs: 24 answered calls a game stacked everyone there).
