@@ -175,6 +175,7 @@ SHOP_FAMILIES = ("JUNGLE", "MONSTER", "POWER", "DURABILITY", "TREASURE", "HOME",
 # ---- self-play (tools/selfplay_modes.py) -----------------------------------------------------
 MODE_EXPLORE = 0.0          # data runs only: probability the chosen mode is swapped for another legal one
 MODE_EXPLORE_SALT = 0       # varies per sweep so the same turn explores differently
+MODE_EXPLORE_HOLD = 3       # an explored mode is held this many turns (one-turn deviations have no measurable outcome)
 USE_ADVERSARY_WEIGHTS = False  # the adversary profile plays the selector in weights_adv.py instead of weights.py
 
 # An exported profile (replays/selfplay/bots/<name>/src/profile.py) overrides any constant above.

@@ -67,12 +67,15 @@ def export_profile(name, explore, salt):
 
 
 def sweep(bot_a, bot_b, out, debug):
+    """Play (or reuse: a folder with results.json is not replayed) and return the summary line."""
+    results = os.path.join(out, "results.json")
+    if os.path.exists(results):
+        return "(reused) " + str(json.load(open(results, encoding="utf-8")).get("summary", ""))[:200]
     cmd = [PY, os.path.join(ROOT, "tools", "run_matches.py"), bot_a, bot_b, "--out", out]
     if debug:
         cmd += ["--debug", "--log-limit", "16000000"]
     stdout = run(cmd)
-    line = next((l for l in stdout.splitlines() if l.startswith("hybrid") and " over " in l), "(no summary)")
-    return line
+    return next((l for l in stdout.splitlines() if " over " in l and " matches" in l), "(no summary)")
 
 
 def wins_of(summary):
@@ -93,10 +96,11 @@ def main():
     ap.add_argument("--gate-wins", type=int, default=35)
     ap.add_argument("--beta", type=float, default=0.5)
     ap.add_argument("--salt-start", type=int, default=1)
+    ap.add_argument("--iteration", type=int, help="run this iteration number (reusing its finished sweeps) instead of the next one")
     args = ap.parse_args()
     os.makedirs(RUNS, exist_ok=True); os.makedirs(DATA, exist_ok=True)
     done = [int(os.path.basename(d)) for d in glob.glob(os.path.join(RUNS, "[0-9]*")) if os.path.basename(d).isdigit()]
-    it0 = max(done) + 1 if done else 1
+    it0 = args.iteration or (max(done) + 1 if done else 1)
     salt = args.salt_start + 10 * (it0 - 1)
     for it in range(it0, it0 + args.iterations):
         t0 = time.time()

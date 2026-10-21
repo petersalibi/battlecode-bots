@@ -47,6 +47,8 @@ class Decider:
         self.was_alive = True
         self.camp_source = "script"   # who ranked the camps at the last retarget
         self.gated_since = -1         # round the spawn gate started holding this body, or -1
+        self.explore_mode = FARM      # self-play exploration: the mode being held and until when
+        self.explore_until = -1
         self.risk_score = None        # the selector's death-risk lane this turn (None when it did not run)
         self.risk_fleeing = False     # fleeing on the risk lane: stays until the lane drops below the lower threshold
         self.escape_source = "script" # who chose the last flee step
@@ -278,17 +280,28 @@ class Decider:
 
     def _explore(self, w, mask, chosen):
         """Self-play exploration (data runs only): with probability MODE_EXPLORE, another legal
-        mode, so the same state is sometimes played differently and its outcome logged. A small
-        deterministic generator seeded from the salt, the round and our slot."""
+        mode among the ones a body can reverse next turn (farm, capture, fight, flee: recall and
+        tribute start channels the bot waits out, and an explored recall every ten turns sent
+        bodies home all game), held for MODE_EXPLORE_HOLD turns so the deviation has a measurable
+        consequence. A small deterministic generator seeded from the salt, the round and our slot."""
+        if self.explore_until > w.round and mask[self.explore_mode]:
+            return self.explore_mode
+        if not w.enemies or chosen in (CAPTURE, TRIBUTE, RECALL):
+            # Only the decisions with an enemy in sight are explored: those are the ones the
+            # ladder punishes, and a random deviation elsewhere (breaking a capture, walking
+            # home from a camp) only wastes the game (2% everywhere cost 150 gems a game).
+            return None
         state = (config.MODE_EXPLORE_SALT * 1000003 + w.round * 7919 + w.slot * 104729 + 12345) & 0x7FFFFFFF
         state = (state * 1103515245 + 12345) & 0x7FFFFFFF
         if ((state >> 8) % 1000) / 1000.0 >= config.MODE_EXPLORE:
             return None
-        options = [m for m in range(N_MODES) if mask[m] and m != chosen]
+        options = [m for m in (FARM, FIGHT, FLEE) if mask[m] and m != chosen]
         if not options:
             return None
         state = (state * 1103515245 + 12345) & 0x7FFFFFFF
-        return options[(state >> 8) % len(options)]
+        self.explore_mode = options[(state >> 8) % len(options)]
+        self.explore_until = w.round + config.MODE_EXPLORE_HOLD
+        return self.explore_mode
 
     def _spawn_gate(self, w):
         """On spawn with enemies in sight. Hold (RECALL: heal, shop, stand off the near edge) until

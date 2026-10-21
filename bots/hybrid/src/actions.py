@@ -403,8 +403,9 @@ class Actions:
                      if hp > 0 and pos.chebyshev_distance(w.pos) <= w.groups[gi].attack_range + 1]
             if camps and w.damage_taken > 0:
                 g = self.d.target_group
-                if g is not None:
-                    # Do not walk straight back into it after healing a little.
+                if g is not None and self.d.last_source != "explore":
+                    # Do not walk straight back into it after healing a little. (An explored flee
+                    # in a self-play data run must not leave this 60-round mark behind.)
                     g.avoid_until = w.round + config.CAMP_FLEE_AVOID_ROUNDS
                     self.d.target_group = None
                     self.d.camp_cache = None

@@ -252,7 +252,9 @@ def main():
     for extra in args.extra:
         # Self-play rows: their own advantage weights (per mode, within the file) times a multiplier,
         # legal labels only, a fresh match-level holdout.
-        path, _, mult = extra.partition(":")
+        path, mult = extra, ""
+        if ":" in extra and extra.rsplit(":", 1)[1].replace(".", "", 1).isdigit():
+            path, mult = extra.rsplit(":", 1)
         _LEGAL = slice(None)
         Xe, me, ye, re_, te = load(path, args.holdout, 0.0)
         we = advantage_weights(re_, ye, args.beta, args.clip) * float(mult or 1.0)
