@@ -107,6 +107,8 @@ class Group:
         self.kinds = [camps[c]["type"] for c in self.camp_indices]
         self.total_health = float(sum(stats.get(k, (1000, 50, 3))[0] for k in self.kinds))
         self.total_strength = float(sum(stats.get(k, (1000, 50, 3))[1] for k in self.kinds))
+        self.health_left = self.total_health      # camp damage between visits: not reconstructed offline
+        self.camp_damage = {}
         self.attack_range = max(stats.get(k, (1000, 50, 3))[2] for k in self.kinds)
         self.harmless = self.total_strength == 0
         self.value = self.gems * config.GEM_VALUE + self.gold * config.GOLD_VALUE
@@ -431,7 +433,7 @@ class OfflineTurn:
                     continue
                 wait = max(0, wait)
                 claimed = claimed_groups.get(g.index, 0)
-                clear_turns = int(g.total_health / (w.dps * (1 + claimed))) + 1
+                clear_turns = int(g.health_left / (w.dps * (1 + claimed))) + 1
                 out.append(Cand(g, travel, clear_turns, g.total_strength * clear_turns / (1 + claimed), wait, claimed))
                 if len(out) >= config.MAX_CAMP_CANDIDATES:
                     break
@@ -620,7 +622,7 @@ def main():
     ap.add_argument("-o", "--out", default=os.path.join(ROOT, "data", "replay_modes.npz"))
     ap.add_argument("--check", help="nnlog text of the same game for a feature comparison")
     ap.add_argument("--index", help="fetch_replays.py index.json: adds each side's ladder rating and result")
-    ap.add_argument("--jobs", type=int, default=12, help="dumps to process in parallel")
+    ap.add_argument("--jobs", type=int, default=int(os.environ.get("BC_JOBS", 8)), help="parallel workers (default: the BC_JOBS environment variable, else 8)")
     ap.add_argument("--winners-only", action="store_true", help="keep only the rows of sides that won (needs --index)")
     args = ap.parse_args()
     index = json.load(open(args.index, encoding="utf-8")) if args.index else {}

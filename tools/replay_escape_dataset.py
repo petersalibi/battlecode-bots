@@ -172,7 +172,7 @@ def main():
     ap.add_argument("dumps", nargs="+")
     ap.add_argument("-o", "--out", default=os.path.join(rf.ROOT, "data", "replay_escapes.npz"))
     ap.add_argument("--index")
-    ap.add_argument("--jobs", type=int, default=12)
+    ap.add_argument("--jobs", type=int, default=int(os.environ.get("BC_JOBS", 8)), help="parallel workers (default: the BC_JOBS environment variable, else 8)")
     args = ap.parse_args()
     index = json.load(open(args.index, encoding="utf-8")) if args.index else {}
     dumps = []

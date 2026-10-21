@@ -33,7 +33,7 @@ class Group:
     __slots__ = ("index", "group", "handle", "gems", "gold", "respawn", "tiles", "tile_list", "camp_handles",
                  "n_camps", "total_health", "total_strength", "harmless", "state", "timer", "seen_round",
                  "respawn_round", "value", "near", "kinds", "reachable", "avoid_until", "anchor",
-                 "attack_range", "camp_static")
+                 "attack_range", "camp_static", "health_left", "camp_damage")
 
     def __init__(self, index, group):
         self.index = index
@@ -73,6 +73,8 @@ class Group:
         self.respawn_round = -1        # round the group is expected back, when known
         self.value = self.gems * config.GEM_VALUE + self.gold * config.GOLD_VALUE
         self.camp_static = None   # camp_features caches the group's fixed inputs here
+        self.health_left = self.total_health   # base health minus the damage seen on its camps
+        self.camp_damage = {}     # camp tile -> damage seen since the group last respawned
 
     def build_near(self):
         """Tiles from which one of our spawn tiles could be in vision: one draw around the first tile,
@@ -344,7 +346,8 @@ class World:
                 g.build_near()
             for camp in g.group.camps():
                 pos = camp.spawn_position()
-                self.camp_at_tile[(pos.x, pos.y)] = (camp, g.index)
+                stats = _camp_stats.get(camp._type)
+                self.camp_at_tile[(pos.x, pos.y)] = (camp, g.index, stats.base_health if stats is not None else 0.0)
             # The anchor is the walkable tile beside the group nearest our spawn. Camp tiles are
             # walls in every field, so distances to a group are read at its anchor.
             ring.clear()
@@ -523,11 +526,21 @@ class World:
             entry = lookup.get((pos.x, pos.y))
             if entry is None:
                 continue
-            camp, gi = entry
+            camp, gi, base = entry
             try:
-                self.visible_camps.append((camp, gi, pos, camp.health()))
+                hp = camp.health()
             except Exception:
                 continue
+            self.visible_camps.append((camp, gi, pos, hp))
+            # Camps do not heal until they respawn: a boss worn down on one trip stays worn down.
+            # (One comparison for an untouched camp: big maps show 20+ camps a turn.)
+            if 0 < hp < base:
+                g = self.groups[gi]
+                key = (pos.x, pos.y)
+                lost = base - hp
+                if lost > g.camp_damage.get(key, 0.0):
+                    g.camp_damage[key] = lost
+                    g.health_left = max(1.0, g.total_health - sum(g.camp_damage.values()))
         # Group states, only for groups that can have a spawn tile in vision.
         pos = self.pos
         for g in self.groups:
@@ -553,6 +566,9 @@ class World:
                 g.timer = 0
                 g.respawn_round = -1
             g.seen_round = self.round
+            if g.state != ALIVE and g.camp_damage:
+                g.camp_damage = {}                 # cleared or respawning: back to full next time
+                g.health_left = g.total_health
             if old != g.state:
                 if g.state == REWARD:
                     self.events.add("camp_cleared")

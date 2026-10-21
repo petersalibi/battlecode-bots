@@ -184,6 +184,12 @@ class Actions:
         # respawning stays valid), or periodically while we are still walking.
         stale = g is None or (g.state != d.target_state and g.state in (W.REWARD, W.RESPAWNING)) or (
             not engaged and w.round - d.target_round >= config.RETARGET_EVERY)
+        if stale and g is not None and d.retarget_peak and fuel.remaining() < d.retarget_peak + config.RETARGET_DEFER_MARGIN:
+            # Not enough fuel left this turn for a re-rank as costly as the worst one so far
+            # (the selector and the re-rank together ran big-world turns out of fuel): keep the
+            # old target one more turn; next turn starts with a full budget.
+            stale = False
+            self.trace = "retarget deferred"
         if stale:
             before = fuel.remaining()
             best = d.choose_camp(turn, w)

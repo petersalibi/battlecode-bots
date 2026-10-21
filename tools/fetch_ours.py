@@ -64,7 +64,7 @@ def main():
     if failed:
         print("failed downloads:", failed)
     py = sys.executable
-    subprocess.run([py, os.path.join(ROOT, "tools", "replay_dump.py"), raw, "-o", ladder, "--jobs", "12"], cwd=ROOT)
+    subprocess.run([py, os.path.join(ROOT, "tools", "replay_dump.py"), raw, "-o", ladder, "--jobs", os.environ.get("BC_JOBS", "8")], cwd=ROOT)
     cmd = [py, os.path.join(ROOT, "tools", "ladder_deaths.py"), ladder, "--index", index_path, "--team", args.team]
     if args.ladder:
         cmd += ["--ladder", args.ladder]

@@ -239,7 +239,7 @@ def main():
     ap.add_argument("-o", "--out", default=os.path.join(rf.ROOT, "data", "replay_camps.npz"))
     ap.add_argument("--check", help="our bot's stdout (camplog lines) of the same game for a feature comparison")
     ap.add_argument("--index", help="fetch_replays.py index.json: adds each side's ladder rating and result")
-    ap.add_argument("--jobs", type=int, default=12)
+    ap.add_argument("--jobs", type=int, default=int(os.environ.get("BC_JOBS", 8)), help="parallel workers (default: the BC_JOBS environment variable, else 8)")
     ap.add_argument("--winners-only", action="store_true")
     args = ap.parse_args()
     if args.check:

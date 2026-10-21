@@ -98,7 +98,7 @@ def main():
     ap.add_argument("replays", nargs="+", help="replay files, match zips, bundles or folders of them")
     ap.add_argument("-o", "--out", default=os.path.join(ROOT, "data", "replays"))
     ap.add_argument("--probe", action="store_true")
-    ap.add_argument("--jobs", type=int, default=12, help="replays to process in parallel (one node process each)")
+    ap.add_argument("--jobs", type=int, default=int(os.environ.get("BC_JOBS", 8)), help="parallel workers (default: the BC_JOBS environment variable, else 8)")
     args = ap.parse_args()
     paths = []
     for path in args.replays:

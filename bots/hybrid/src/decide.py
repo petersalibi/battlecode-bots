@@ -353,7 +353,7 @@ class Decider:
         needs_help = False
         if not g.harmless:
             budget = max(w.hp - config.HEALTH_RESERVE * w.max_hp, 1.0)
-            solo_damage = g.total_strength * (int(g.total_health / w.dps) + 1)
+            solo_damage = g.total_strength * (int(g.health_left / w.dps) + 1)
             needs_help = solo_damage >= budget
             if cand.damage >= budget:
                 # Too much for the bodies on it now. Plan on more allies joining, if that would work:
@@ -362,8 +362,24 @@ class Decider:
                 m, damage_m, clear_m = bodies, cand.damage, cand.clear_turns
                 while damage_m >= budget and m < max_bodies:
                     m += 1
-                    clear_m = int(g.total_health / (w.dps * m)) + 1
+                    clear_m = int(g.health_left / (w.dps * m)) + 1
                     damage_m = g.total_strength * clear_m / m
+                if damage_m >= budget and config.BOSS_TRIPS and g.gems >= config.BOSS_MIN_GEMS:
+                    # A boss (golems: 5,000 health each): the whole team, over several trips. Camps
+                    # do not heal until they respawn, so each trip's damage stays; winners on boss
+                    # battle had 3-5 bodies on it from round 40-120, we never had more than two.
+                    m = w.n_bodies
+                    clear_m = int(g.health_left / (w.dps * m)) + 1
+                    damage_m = g.total_strength * clear_m / m
+                    trips = int(damage_m / budget) + 1
+                    if trips <= config.BOSS_MAX_TRIPS:
+                        home = w.spawn_field.get(g.anchor) if g.anchor is not None else cand.travel
+                        turns = cand.travel + cand.wait + clear_m + config.CAPTURE_TURNS + (trips - 1) * (home + config.BOSS_TRIP_OVERHEAD)
+                        cand.bodies = m
+                        score = g.value / m / max(turns, 1) * config.HELP_DISCOUNT * config.BOSS_FACTOR
+                        if cand.claimed:
+                            score *= 1.5
+                        return self._finish_camp_score(cand, w, g, score, True)
                 if damage_m < budget:
                     bodies = m
                     turns = cand.travel + cand.wait + clear_m + config.CAPTURE_TURNS
@@ -376,6 +392,11 @@ class Decider:
             else:
                 score *= max(0.1, 1.0 - config.DANGER_WEIGHT * cand.damage / budget)
         cand.bodies = bodies
+        return self._finish_camp_score(cand, w, g, score, needs_help)
+
+    def _finish_camp_score(self, cand, w, g, score, needs_help):
+        """The adjustments shared by every plan: enemies near, calls for help, claims, the
+        current target, deaths there."""
         if config.CAMP_ENEMY_PENALTY and g.anchor is not None:
             # Top ladder teams spend half as many turns as we do with an enemy within 5 tiles. A
             # camp with an enemy seen near it lately is worth less than its gems say; so, when

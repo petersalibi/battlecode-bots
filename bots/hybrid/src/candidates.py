@@ -97,7 +97,7 @@ class Turn:
                 wait = 0
             claimed = claimed_groups.get(g.index, 0)
             # Allies already on the group share the work and the monsters' attention.
-            clear_turns = int(g.total_health / (w.dps * (1 + claimed))) + 1
+            clear_turns = int(g.health_left / (w.dps * (1 + claimed))) + 1
             damage = g.total_strength * clear_turns / (1 + claimed)
             out.append(CampCandidate(g, travel, clear_turns, damage, wait, claimed))
             if len(out) >= config.MAX_CAMP_CANDIDATES:

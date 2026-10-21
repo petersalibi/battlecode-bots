@@ -204,7 +204,7 @@ def main():
     ap.add_argument("--maps", help="comma-separated map names (default: every map in maps/)")
     ap.add_argument("--sides", choices=("both", "a", "b"), default="both",
                     help="play bot_a as team A, team B, or both (default)")
-    ap.add_argument("--jobs", type=int, default=12, help="matches run in parallel (12 cores are available for this)")
+    ap.add_argument("--jobs", type=int, default=int(os.environ.get("BC_JOBS", 8)), help="parallel workers (default: the BC_JOBS environment variable, else 8)")
     ap.add_argument("--rounds", type=int, help="stop early (no statistics are written for truncated matches)")
     ap.add_argument("--timeout", type=int, default=600, help="wall-clock seconds per match")
     ap.add_argument("--out", help="output directory (default: replays/batch/<timestamp>)")

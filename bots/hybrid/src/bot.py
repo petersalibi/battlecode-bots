@@ -31,14 +31,18 @@ class Bot:
             w.init_static()
             self.nav = navigation.Navigator(w)
             self.act = actions.Actions(w, self.nav, self.d)
-            print("init: %s slot %d/%d groups=%d map=%dx%d dps=%d plan=%s budget=%d init_fuel=%d profile=%s" % (
-                w.kind_name, w.slot, w.n_bodies, len(w.groups), w.width, w.height, int(w.dps), w.plan,
-                start_fuel, start_fuel - fuel.remaining(), w.init_profile), flush=True)
+            # The plan (22 map features, picks) only in the group log: formatting it on the first
+            # turn cost the last 50K of a budget that big maps already spend to within 100K.
+            print("init: %s slot %d/%d groups=%d map=%dx%d dps=%d budget=%d init_fuel=%d profile=%s%s" % (
+                w.kind_name, w.slot, w.n_bodies, len(w.groups), w.width, w.height, int(w.dps),
+                start_fuel, start_fuel - fuel.remaining(), w.init_profile,
+                (" plan=%s" % (w.plan,)) if config.LOG_GROUPS else ""), flush=True)
             if fuel.remaining() < config.FIRST_TURN_MIN + config.FIRST_TURN_PER_TILE * w.width * w.height:
                 # A huge map: acting now would suspend the turn into the next round. Standing still
                 # for one round is cheaper, and the next turn takes the cheap first-turn path.
                 print("init: skipping the first turn's actions, %d fuel left" % fuel.remaining(), flush=True)
-                w.finish_init()
+                if fuel.remaining() > config.FINISH_INIT_RESERVE:
+                    w.finish_init()
                 return
         w.refresh()
         self.nav.turn_reset()
