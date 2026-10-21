@@ -45,11 +45,15 @@ class Bot:
         after_refresh = fuel.remaining()
 
         if not w.alive:
+            if self.d.was_alive:
+                self.d.was_alive = False
+                self.d.record_death(w.round)
             self.act.shop()
             memory_codec.write_claim(w.slot, memory_codec.STATUS_BUSY, -1)
             if config.TRACE_SLOT == w.slot:
                 print("trace r%d dead gold=%d" % (w.round, w.gold), flush=True)
             return
+        self.d.was_alive = True
         if w.channeling:
             # Recall, tribute or teleport in progress: leave it running.
             memory_codec.write_claim(w.slot, memory_codec.STATUS_BUSY, -1)
@@ -76,14 +80,17 @@ class Bot:
                 cambc.debug_block(lambda: datalog.write(w, turn, self.d, mode, self.d.last_mask, self.d.last_scores,
                                                         prev_mode, prev_turns))
         after_decide = fuel.remaining()
+        self.d.review_cost = 0
         self.act.run(mode, turn)
         memory_codec.write_claim(w.slot, self.act.status, self.act.claim_group)
         self._stall_guard(mode)
 
         now = fuel.remaining()
         used = start_fuel - now
-        if after_decide - now > self.d.act_peak:
-            self.d.act_peak = after_decide - now    # the network's reserve must cover the worst act so far
+        if after_decide - now - self.d.review_cost > self.d.act_peak:
+            # The network's reserve must cover the worst act so far; the camp review has its own
+            # guard and never shares a turn with a retarget, so its cost stays out.
+            self.d.act_peak = after_decide - now - self.d.review_cost
         if config.TRACE_SLOT == w.slot:
             target = self.d.target_group
             raw = len(cambc.vision.camps())
@@ -109,9 +116,9 @@ class Bot:
             self.last_logged_mode = mode
             target = self.d.target_group.index if self.d.target_group is not None else -1
             avg = self.fuel_total // self.turns if self.turns else 0
-            print("r%d %s: %s hp=%d%% gems=%d gold=%d target=%d enemies=%d fuel_used=%d avg=%d max=%d [%s]" % (
+            print("r%d %s: %s hp=%d%% gems=%d gold=%d target=%d enemies=%d fuel_used=%d avg=%d max=%d retarget=%d/%s [%s]" % (
                 w.round, w.kind_name, config.MODE_NAMES[mode], int(w.hp_ratio * 100), w.gems, w.gold, target,
-                len(w.enemies), used, avg, self.fuel_max, self.worst), flush=True)
+                len(w.enemies), used, avg, self.fuel_max, self.d.retarget_peak, self.d.camp_source, self.worst), flush=True)
         if not w.near_ready:
             # Leftover fuel builds the group anchors and vision masks, a few groups per turn, after
             # the turn's actions are safely done (a suspended turn loses its actions).

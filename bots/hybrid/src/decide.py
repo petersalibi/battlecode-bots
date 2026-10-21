@@ -5,7 +5,9 @@ network only ranks options the script generated, and masks are applied before an
 network can never choose an illegal action. When a head is off, has no weights, is short of fuel,
 or is unsure, the script decides.
 """
+import camp_features
 import config
+import datalog
 import features
 import fuel
 import nn
@@ -36,6 +38,34 @@ class Decider:
         self.cache_scored_round = -2000
         self.retargets = 0
         self.idle_turns = 0           # consecutive turns without a move or an action (bot.py)
+        self.deaths = {}              # group index -> rounds this body died while targeting it
+        self.camp_review_round = -1   # round the camp scorer reviews the last ranking (actions.farm)
+        self.review_cost = 0          # fuel the camp review cost this turn (kept out of act_peak)
+        self.net_target = None        # group index the scorer chose; the script keeps it while it is a candidate
+        self.was_alive = True
+        self.camp_source = "script"   # who ranked the camps at the last retarget
+
+    def record_death(self, round_number):
+        """Called on the first dead turn: remember where we were going (camp_features reads it)."""
+        g = self.target_group if self.target_group is not None else self.capture_group
+        if g is not None:
+            rounds = self.deaths.setdefault(g.index, [])
+            rounds.append(round_number)
+            if len(rounds) > 8:
+                del rounds[0]
+
+    def camp_reserve(self, w):
+        """The camp scorer runs inside the farm action, after the script's own ranking: what is
+        left to pay for is at most one approach field (80 fuel per tile) plus a margin."""
+        return config.FIELD_COST_PER_TILE * w.width * w.height + config.NN_ACT_MARGIN
+
+    def nn_reserve(self, w):
+        """Fuel that must remain after a network runs: acting afterwards may build a whole-map field
+        (80 fuel per tile) or re-rank 28 groups (01yellow-brick-road: 780K), so the reserve is the
+        larger of a map-sized estimate and a quarter more than the worst act seen this game."""
+        return max(config.NN_FUEL_RESERVE + 3 * config.FIELD_COST_PER_TILE * w.width * w.height // 2
+                   + config.NN_GROUP_RESERVE * max(0, len(w.groups) - config.NN_GROUP_FREE),
+                   self.act_peak * 5 // 4 + config.NN_ACT_MARGIN)
 
     # ---- mode ----------------------------------------------------------------------
     def masks(self, w, turn):
@@ -190,14 +220,7 @@ class Decider:
         if chosen is None:
             chosen = FARM
         net = weights.MODE_SELECTOR if config.USE_NN_MODE else None
-        # Acting after the decision may build a whole-map field (80 fuel per tile), so the reserve
-        # grows with the map: on 100x100 the network only runs with 1.8M in hand.
-        # Acting after the decision may build a whole-map field (80 fuel per tile) or re-rank 28
-        # groups (01yellow-brick-road: 780K), so the reserve is the larger of a map-sized estimate
-        # and a quarter more than the worst act seen this game.
-        reserve = max(config.NN_FUEL_RESERVE + 3 * config.FIELD_COST_PER_TILE * w.width * w.height // 2
-                      + config.NN_GROUP_RESERVE * max(0, len(w.groups) - config.NN_GROUP_FREE),
-                      self.act_peak * 5 // 4 + config.NN_ACT_MARGIN)
+        reserve = self.nn_reserve(w)
         if net is not None and w.round > config.NN_SKIP_ROUNDS and fuel.can_afford(MODE_SELECTOR_FUEL, reserve):
             try:
                 net_scores = net.forward(features.build(w, turn, self, rescore=False))
@@ -280,14 +303,34 @@ class Decider:
             if config.LOG_DECISIONS:
                 print(f"r{w.round} {w.kind_name}: no camp candidates", flush=True)
             return None
-        if config.USE_NN_CAMP and weights.CAMP_SCORER is not None:
-            pass                                                       # TODO: factored candidate scorer
+        # The script ranks first: its scores are the fallback, and its zero (a group not even the
+        # whole team could clear) and MIN_CAMP_SCORE (nothing worth farming) stay as the mask.
         best = None
         for cand in cands:
             self.score_camp(cand, w)
             if cand.score > config.MIN_CAMP_SCORE and (best is None or cand.score > best.score):
                 best = cand
         self.retargets += 1
+        self.camp_source = "script"
+        allowed = [cand.score > config.MIN_CAMP_SCORE for cand in cands]
+        if self.net_target is not None:
+            kept = next((cand for index, cand in enumerate(cands) if allowed[index] and cand.group.index == self.net_target), None)
+            if kept is not None:
+                best = kept
+                self.camp_source = "nn"
+            else:
+                self.net_target = None
+        # The network's review runs next turn (review_camp): this turn already paid for the
+        # candidate build, the ranking and usually an approach field.
+        self.camp_review_round = w.round + 1 if config.USE_NN_CAMP and weights.CAMP_SCORER is not None and sum(allowed) >= 2 else -1
+        if config.DATALOG:
+            # Debug builds only (no fuel locally, never on the platform): the camp rows for
+            # tools/replay_camp_dataset.py --check. The script's pick is the label.
+            script_pick = -1
+            for index, cand in enumerate(cands):
+                if allowed[index] and (script_pick < 0 or cand.score > cands[script_pick].score):
+                    script_pick = index
+            self._camp_log(w, turn, cands, script_pick)
         if config.LOG_DECISIONS:
             top = sorted(cands, key=lambda c: -c.score)[:3]
             summary = " | ".join("g%d k%s t%d c%d d%d cl%d s%d" % (c.group.index, c.group.kinds, c.travel, c.clear_turns,
@@ -296,6 +339,40 @@ class Decider:
             print("r%d %s: retarget#%d hp=%d n=%d -> %s" % (w.round, w.kind_name, self.retargets, int(w.hp), len(cands),
                                                             summary), flush=True)
         return best
+
+    def review_camp(self, turn, w):
+        """The camp scorer's pass over the script's last ranking, the turn after it: re-rank the
+        script's best NN_CAMP_TOP candidates and return the one to switch to, or None. Each
+        candidate costs about 70K fuel (features plus the dot product), the tower 80K."""
+        self.camp_review_round = -1
+        net = weights.CAMP_SCORER
+        cands = self.camp_cache
+        if net is None or not cands or w.round <= config.NN_SKIP_ROUNDS:
+            return None
+        top = sorted((c for c in cands if c.score > config.MIN_CAMP_SCORE), key=lambda c: -c.score)[:config.NN_CAMP_TOP]
+        if len(top) < 2 or not fuel.can_afford(config.CAMP_SCORER_FUEL * (1 + len(top)), self.camp_reserve(w)):
+            return None
+        try:
+            state, rows = camp_features.build(w, turn, self, top)
+            scores = net.score(state, rows)
+            ok = [True] * len(top)
+            if nn.margin(scores, ok) < getattr(weights, "CAMP_SCORER_MARGIN", 0):
+                return None
+            pick = nn.masked_argmax(scores, ok)
+            if pick is None:
+                return None
+            self.camp_source = "nn"
+            self.net_target = top[pick].group.index
+            return top[pick]
+        except Exception:
+            return None
+
+    def _camp_log(self, w, turn, cands, script_pick):
+        try:
+            import cambc
+            cambc.debug_block(lambda: datalog.write_camp(w, turn, self, cands, script_pick, self.camp_source))
+        except Exception:
+            pass
 
     # ---- fights --------------------------------------------------------------------
     def choose_fight_target(self, turn, w):

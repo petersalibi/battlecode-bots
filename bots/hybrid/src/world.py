@@ -33,7 +33,7 @@ class Group:
     __slots__ = ("index", "group", "handle", "gems", "gold", "respawn", "tiles", "tile_list", "camp_handles",
                  "n_camps", "total_health", "total_strength", "harmless", "state", "timer", "seen_round",
                  "respawn_round", "value", "near", "kinds", "reachable", "avoid_until", "anchor",
-                 "attack_range")
+                 "attack_range", "camp_static")
 
     def __init__(self, index, group):
         self.index = index
@@ -72,6 +72,7 @@ class Group:
         self.seen_round = -1
         self.respawn_round = -1        # round the group is expected back, when known
         self.value = self.gems * config.GEM_VALUE + self.gold * config.GOLD_VALUE
+        self.camp_static = None   # camp_features caches the group's fixed inputs here
 
     def build_near(self):
         """Tiles from which one of our spawn tiles could be in vision: one draw around the first tile,
@@ -140,6 +141,7 @@ class World:
         self.round = 0
         self.prev_hp = None
         self.enemy_memory = {}         # handle -> (pos, round, hp_ratio)
+        self._spawn_centers = None
         self.last_enemy_round = -10_000
         self.last_enemy_pos = None
         self.enemies_killed = []       # rounds at which an enemy was seen to die
@@ -568,6 +570,18 @@ class World:
             return sum(self.me.item_count())
         except Exception:
             return 0
+
+    def spawn_centers(self):
+        """Mean tile of each spawn region (ours, theirs), built once: which half of the map a camp
+        is on, at two distance calls per candidate instead of one per spawn tile."""
+        if self._spawn_centers is None:
+            centers = []
+            for region in (self.spawn_ally, self.spawn_enemy):
+                tiles = region.positions()
+                n = max(len(tiles), 1)
+                centers.append(cambc.Vec2(sum(t.x for t in tiles) // n, sum(t.y for t in tiles) // n))
+            self._spawn_centers = tuple(centers)
+        return self._spawn_centers
 
     def enemy_spawn_field(self):
         """Walking turns to the enemy spawn, built once when the fuel is there (None until then)."""

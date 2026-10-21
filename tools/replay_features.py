@@ -200,6 +200,10 @@ class Tracker:
         self.enemies_killed = []
         self.decider = decide.Decider()
         self.ward_round = -10_000
+        self.enemy_memory = {}         # enemy champ index -> (pos, round, hp_ratio), like World.enemy_memory
+        self.last_camp_group = None    # group of the camp this body last attacked, and when
+        self.last_camp_round = -10_000
+        self.alive = True
 
 
 class OfflineWorld:
@@ -232,6 +236,7 @@ class OfflineWorld:
         self.channel_time = 0
         ranged, kit = KITS.get(self.kind, (False, []))
         self.is_ranged = ranged
+        self.has_dash = any(k == "dash" for k, _m in kit)
         self.attack_range = 3 if ranged else 1
         self.abilities = [types.SimpleNamespace(slot=0), types.SimpleNamespace(slot=1)]
         dps = self.strength
@@ -258,6 +263,10 @@ class OfflineWorld:
             else:
                 self.enemies.append(Enemy(c, self.pos))
         self.nearest_enemy = min(self.enemies, key=lambda e: e.dist) if self.enemies else None
+        for c in s["champs"]:
+            if c["team"] != self.team:
+                tracker.enemy_memory[c["i"]] = (Vec(c["x"], c["y"]), self.round, (c["hp"] or 0) / max(c["max"] or 1, 1))
+        self.enemy_memory = tracker.enemy_memory
         self.enemy_power = sum(e.hp * e.strength for e in self.enemies)
         self.ally_power = self.hp * self.strength + sum(hp * strength for p, hp, strength, d in self.allies if d <= config.FIGHT_RANGE)
         if self.enemies:
@@ -294,16 +303,23 @@ class OfflineWorld:
         self.capture_rounds_left = 0
         self.prev_mode = prev_mode
 
-    def set_claims(self, team_modes, me):
+    def set_claims(self, team_modes, me, team_targets=None):
         """The bot's shared-memory claims board, approximated from teammates' inferred modes:
-        tribute, recall, flee and death all post STATUS_BUSY."""
+        tribute, recall, flee and death all post STATUS_BUSY; a farming or capturing ally posts
+        its group when team_targets (champ -> group index or None) says which."""
         claims = [(memory_codec.STATUS_IDLE, -1)] * memory_codec.MAX_BODIES
         for champ, mode in team_modes.items():
             if champ == me:
                 continue
             slot = champ - (self.n_bodies if self.team == 1 else 0)
-            if 0 <= slot < memory_codec.MAX_BODIES and (mode == "dead" or mode in (config.TRIBUTE, config.RECALL, config.FLEE)):
+            if not 0 <= slot < memory_codec.MAX_BODIES:
+                continue
+            if mode == "dead" or mode in (config.TRIBUTE, config.RECALL, config.FLEE):
                 claims[slot] = (memory_codec.STATUS_BUSY, -1)
+            elif team_targets is not None and mode in (config.FARM, config.CAPTURE):
+                group = team_targets.get(champ)
+                if group is not None:
+                    claims[slot] = (memory_codec.STATUS_FARM if mode == config.FARM else memory_codec.STATUS_CAPTURE, group)
         self.claims = claims
 
     # features.build and decide.score_camp read these
@@ -312,6 +328,18 @@ class OfflineWorld:
 
     def shards_bought(self):
         return sum(self.items)
+
+    def spawn_centers(self):
+        st = self.static
+        if getattr(st, "_spawn_centers", None) is None:
+            centers = []
+            for tiles in st.spawn_tiles:
+                tiles = list(tiles or [])
+                n = max(len(tiles), 1)
+                centers.append(Vec(sum(x for x, y in tiles) // n, sum(y for x, y in tiles) // n))
+            st._spawn_centers = centers
+        ours, theirs = st._spawn_centers[self.team], st._spawn_centers[1 - self.team]
+        return ours, theirs
 
     def turns_to_enemy_spawn(self):
         return self._enemy_spawn
@@ -376,6 +404,10 @@ class OfflineTurn:
                 if travel != UNREACHABLE and travel <= config.MAX_CAMP_TURNS + reach:
                     nearest.append((travel, g.index))
             nearest.sort()
+            claimed_groups = {}
+            for slot, (status, group_index) in enumerate(w.claims):
+                if slot != w.slot and group_index >= 0 and status in (memory_codec.STATUS_FARM, memory_codec.STATUS_CAPTURE):
+                    claimed_groups[group_index] = claimed_groups.get(group_index, 0) + 1
             out = []
             for travel, index in nearest[:config.MAX_CAMP_CANDIDATES + 4]:
                 g = st.groups[index]
@@ -386,8 +418,9 @@ class OfflineTurn:
                 if wait > config.RESPAWN_WAIT_TURNS:
                     continue
                 wait = max(0, wait)
-                clear_turns = int(g.total_health / w.dps) + 1
-                out.append(Cand(g, travel, clear_turns, g.total_strength * clear_turns, wait, 0))
+                claimed = claimed_groups.get(g.index, 0)
+                clear_turns = int(g.total_health / (w.dps * (1 + claimed))) + 1
+                out.append(Cand(g, travel, clear_turns, g.total_strength * clear_turns / (1 + claimed), wait, claimed))
                 if len(out) >= config.MAX_CAMP_CANDIDATES:
                     break
             self._camps = out

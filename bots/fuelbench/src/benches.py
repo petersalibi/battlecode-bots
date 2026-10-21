@@ -125,6 +125,43 @@ def mode_selector():
     return max(range(6), key=scores.__getitem__)
 
 
+# Camp scorer candidates: bilinear (state tower 20 -> 16 -> 22, then one dot per candidate) against
+# the factored MLP (42 -> 32 -> 16 -> 1 per candidate), twelve candidates each.
+_CS = _vector(20, 31)
+_CC = [_vector(22, 40 + i) for i in range(12)]
+_T1, _T2 = _packed(20, 16, 33), _packed(16, 22, 35, last=True)
+_F1, _F2, _F3 = _packed(42, 32, 37), _packed(32, 16, 39), _packed(16, 1, 41, last=True)
+
+
+_T0 = _packed(20, 22, 43, last=True)
+_DOT_LANE, _DOT_BIAS = 48, 1 << 44
+_DOT_SHIFT, _DOT_MASK = _DOT_LANE * 21, (1 << _DOT_LANE) - 1
+_DOT_ADD = sum(_DOT_BIAS << (_DOT_LANE * k) for k in range(43))
+
+
+def camp_bilinear_12():
+    w = _T2.forward(_T1.forward(_CS))
+    return [sum(map(mul, w, c)) for c in _CC]
+
+
+def camp_bilinear_packed_12():
+    w = _T0.forward(_CS)
+    packed = sum(v << (_DOT_LANE * (21 - j)) for j, v in enumerate(w))
+    out = []
+    for c in _CC:
+        buf = bytearray(6 * 22)
+        buf[::6] = bytes(c)
+        out.append((((packed * int.from_bytes(buf, "little") + _DOT_ADD) >> _DOT_SHIFT) & _DOT_MASK) - _DOT_BIAS)
+    return out
+
+
+def camp_factored_12():
+    out = []
+    for c in _CC:
+        out.append(_F3.forward(_F2.forward(_F1.forward(_CS + c)))[0])
+    return out
+
+
 def sdk_me():
     return cambc.me()
 
@@ -187,6 +224,9 @@ BENCHES = [
     ("packed_256x128", packed256, 200, 256 * 128),
     ("packed_128x64_half_zero", packed128_sparse_half, 200, 64 * 64),
     ("mode_selector_64_32_16_6", mode_selector, 200, 64 * 32 + 32 * 16 + 16 * 6),
+    ("camp_bilinear_20_16_22_x12", camp_bilinear_12, 200, 20 * 16 + 16 * 22 + 12 * 22),
+    ("camp_bilinear_packed_20_22_x12", camp_bilinear_packed_12, 200, 20 * 22 + 12 * 22),
+    ("camp_factored_42_32_16_1_x12", camp_factored_12, 50, 12 * (42 * 32 + 32 * 16 + 16)),
     ("sdk_me", sdk_me, 500, 0),
     ("sdk_position", sdk_position, 500, 0),
     ("sdk_health", sdk_health, 500, 0),

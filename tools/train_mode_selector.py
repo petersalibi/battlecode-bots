@@ -27,6 +27,7 @@ import torch.nn.functional as F
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from progress import Progress  # noqa: E402
+import weights_io  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "bots", "hybrid", "src"))
@@ -211,32 +212,9 @@ def int_forward(spec_layers, x):
 
 
 def export(spec_layers, score_unit, margin_logits, path, note):
-    def lit(layer):
-        raw = bytes(int(v) & 0xFF for v in layer["weights"].reshape(-1))
-        return ("    {\"n_in\": %d, \"n_out\": %d, \"mult\": %d, \"shift\": %d,\n     \"bias\": %s,\n     \"weights\": %r}"
-                % (layer["n_in"], layer["n_out"], layer["mult"], layer["shift"], [int(v) for v in layer["bias"]], raw))
-    body = ",\n".join(lit(l) for l in spec_layers)
     margin = int(round(margin_logits / score_unit))
-    text = f'''"""Generated network weights. Never edited by hand: tools/train_mode_selector.py writes this file.
-
-Each head is a spec for nn.from_spec, or None when no trained weights exist yet. Networks are
-packed at import time, which is build time, so they cost no match fuel.
-
-{note}
-"""
-import nn
-
-MODE_SELECTOR_SPEC = {{"layers": [
-{body}
-]}}
-MODE_SELECTOR_MARGIN = {margin}   # integer score gap equal to {margin_logits} logits; below it the script decides
-CAMP_SCORER_SPEC = None
-
-MODE_SELECTOR = nn.from_spec(MODE_SELECTOR_SPEC)
-CAMP_SCORER = nn.from_spec(CAMP_SCORER_SPEC)
-'''
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text)
+    weights_io.write_head(path, "MODE_SELECTOR", spec_layers, margin,
+                          "integer score gap equal to %s logits; below it the script decides" % margin_logits, note)
 
 
 def main():

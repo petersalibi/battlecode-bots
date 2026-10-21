@@ -14,6 +14,9 @@ Champion turns get 2.5M fuel (the first champion turn about 4.6M). Turning the g
 | Packed int8 256x128 | 3.21M | 98 |
 | Packed int8 128x64, half the inputs zero (compress) | 0.65M | 160 per non-zero MAC |
 | Mode selector 64-32-16-6, full forward + argmax | 0.55M | 208 |
+| Camp scorer, factored MLP 42-32-16-1 per candidate, 12 candidates (2026-10-21) | 5.05M (suspended) | 225 |
+| Camp scorer, bilinear: state tower 20-16-22 once, then `sum(map(mul))` dot per candidate, 12 candidates | 0.53M | the dots are ~35K each: every C call inside `map` is charged |
+| Camp scorer, bilinear with the dot packed into one big-integer multiply (48-bit lanes) | 1.0M | big-integer products are charged by size: slower than the plain dot |
 | `cambc.me()` | 1,600 | |
 | `me().position()` | 3,400 | |
 | `me().health()` | 3,200 | |

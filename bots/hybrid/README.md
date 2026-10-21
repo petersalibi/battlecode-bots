@@ -249,6 +249,59 @@ the spread between runs on similar data says a 70-game harness result is only go
 plus or minus five games. Selection by rating matters more than volume; a bigger, better set
 would be the top 15 to 25 teams over a longer post-patch window.
 
+## The camp scorer (second head, 2026-10-21)
+
+Which camp group to farm. The script's `score_camp` is a hand formula; the scorer ranks the
+same candidate list (`candidates.py`, up to twelve groups in reach) from what strong ladder
+teams actually farmed.
+
+**Shape: bilinear, not an MLP.** `camp_features.py` builds a 20-input state vector (health,
+power, bag, position, threat, game state) once and a 22-input candidate vector per group
+(travel, wait, clear turns, expected damage, reward, kinds, allies claiming it, which half of the
+map, how long since an enemy was seen near it, our own deaths there). A single linear layer maps
+the state to one weight per candidate feature, and a candidate's score is that weight vector
+dotted with its features (`nn.Bilinear`). The guide's factored MLP (42-32-16-1 per candidate) was
+built first and measured at 5M fuel for twelve candidates: every requantised lane of a hidden
+layer costs about 10K fuel per candidate, so per-candidate hidden layers are unaffordable. The
+bilinear scorer costs 0.53M for twelve candidates (`bots/fuelbench/RESULTS.md`) and gave up only
+1.6 points of accuracy (60.4% against 62.0% top-1).
+
+**When it runs.** Not on the retarget turn: that turn already pays for the candidate build, the
+script's ranking and an approach field, and the scorer on top exhausted the budget (14 to 100
+exhaustions per ten games, invisible to the bot's own fuel counter because a suspended turn
+resets it). It reviews the script's cached ranking the turn after (`Decider.review_camp`, from
+`actions.farm`), over the script's best eight candidates only, and its choice persists across the
+script's later retargets while the group stays a candidate (without that a body walked between
+the script's pick and the scorer's every ten turns: 36 target changes in one broken-curve game).
+The review's cost is kept out of `act_peak`, because the mode selector sizes its reserve from
+the worst act and a 0.8M review on top had silently switched the selector off (23-47 against v6
+with it off, 34-36 with it on).
+
+**Data and training.** `tools/replay_camp_dataset.py` turns the ladder dumps into rows at every
+retarget a farming body would make (every ten rounds, not hitting a camp, inferred mode farm):
+the state, the candidates, and the group the body attacked within the next 60 rounds; rows where
+it died first, attacked nothing, or went to a group outside our list are dropped. 286K rows from
+the 948 post-patch games, 159K of them winning sides. `--check` against a debug build's camplog
+matched all 428 logged retargets of a lanes game (state features within 2 on 90%, candidate
+features on 68%: the rest is the bot's belief against the dump's truth, such as respawn state and
+early claims). `tools/train_camp_scorer.py` trains with a listwise cross entropy over the masked
+candidates, the selector's penalties on the legal scores, winners weighted up, and exports through
+`tools/weights_io.py`, which rewrites one head in `weights.py` without touching the other.
+
+| Rows | Held-out top-1 | Nearest-candidate baseline |
+|---|---|---|
+| 948 post-patch games, all winners (bilinear, shipped weights) | 60.4% | 48.1% |
+| same, factored MLP | 62.0% | 48.1% |
+| same, rated 1800+ only | 61.5% | 48.0% |
+| 89 games of the top 15 teams | 58.4% | 46.0% |
+
+Offline the scorer disagrees with the script on 43% of winners' rows and is right on 49% of
+those against the script's 18%, on every map. In the mirror it is level: 33-37 (+26 gems) against
+v7 and 34-36 (-28) against v6 with the 0.3-logit margin, 29-41 and 40-30 with a 1.0-logit margin,
+one fuel exhaustion in 140 games either way. What
+strong teams farm (contested middles, with escorts) is not always what a lone body of ours can
+hold, which the mirror cannot show and the ladder can.
+
 ## Map pool
 
 `cambc maps pull` fails with an HTTP 303 from the platform (CLI 2.2.5). The eight maps missing from

@@ -28,10 +28,19 @@ class PackedLayer:
         """x: list of ints 0-255. Returns uint8 activations, or raw integer scores if last."""
         if len(x) != self.n_in:
             raise ValueError(f"expected {self.n_in} inputs, got {len(x)}")
+        return self.finish(self.accumulate(x), sum(x))
+
+    def accumulate(self, x, start=0):
+        """Multiply-accumulate of an input slice against the columns from `start`, without the
+        bias: a layer's input can be summed in pieces (a per-turn part plus a per-candidate part)."""
+        cols = self.cols if start == 0 and len(x) == self.n_in else self.cols[start:start + len(x)]
         # Zero activations and their columns are dropped before the multiply.
-        acc = sum(map(mul, compress(x, x), compress(self.cols, x)), self.bias)
-        lanes = array("I", acc.to_bytes(self.nbytes, "little"))
-        off = 128 * sum(x) + LANE_OFFSET
+        return sum(map(mul, compress(x, x), compress(cols, x)))
+
+    def finish(self, acc, total):
+        """Requantise an accumulator (sum of accumulate() pieces); total is the sum of the inputs."""
+        lanes = array("I", (acc + self.bias).to_bytes(self.nbytes, "little"))
+        off = 128 * total + LANE_OFFSET
         if self.last:
             return [v - off for v in lanes]
         m, s = self.mult, self.shift
@@ -48,6 +57,79 @@ class Network:
         for layer in self.layers:
             x = layer.forward(x)
         return x
+
+
+class Factored:
+    """A candidate scorer: the first layer's input is [state | candidate], the state part is
+    accumulated once per call and the candidate part once per candidate, so ranking twelve
+    candidates costs a little more than one forward pass. The last layer has one output."""
+
+    def __init__(self, net, n_state):
+        self.net = net
+        self.n_state = n_state
+        self.n_in = net.n_in
+        self.n_cand = net.n_in - n_state
+
+    def score(self, state, candidates):
+        """state: n_state ints 0-255; candidates: list of n_cand-int lists. Returns one integer
+        score per candidate (higher is better)."""
+        if len(state) != self.n_state:
+            raise ValueError(f"expected {self.n_state} state inputs, got {len(state)}")
+        first = self.net.layers[0]
+        rest = self.net.layers[1:]
+        base = first.accumulate(state, 0)
+        state_sum = sum(state)
+        out = []
+        for cand in candidates:
+            if len(cand) != self.n_cand:
+                raise ValueError(f"expected {self.n_cand} candidate inputs, got {len(cand)}")
+            h = first.finish(base + first.accumulate(cand, self.n_state), state_sum + sum(cand))
+            for layer in rest:
+                h = layer.forward(h)
+            out.append(h[0])
+        return out
+
+    def forward(self, x):
+        """Plain forward on a concatenated [state | candidate] row (the parity test uses it)."""
+        return self.net.forward(x)
+
+
+class Bilinear:
+    """A candidate scorer whose per-candidate cost is one C-level dot product. The layers run on
+    the state vector alone (once per call) and their last output is a weight per candidate
+    feature; a candidate's score is that weight vector dotted with its feature vector. Every
+    requantised lane costs about 10K fuel in Python, so unlike Factored nothing per candidate is
+    requantised: twelve candidates cost the state tower plus about 12 x 3K."""
+
+    def __init__(self, net, n_state):
+        self.net = net
+        self.n_state = n_state
+        self.n_cand = net.n_out
+        self.n_in = n_state + net.n_out
+
+    def score(self, state, candidates):
+        """About 35K fuel per candidate (22 C-level multiplies plus the sum). Packing the dot into
+        one big-integer multiply was measured twice as expensive: big-integer products are charged
+        by their size."""
+        if len(state) != self.n_state:
+            raise ValueError(f"expected {self.n_state} state inputs, got {len(state)}")
+        w = self.net.forward(state)
+        return [sum(map(mul, w, cand)) for cand in candidates]
+
+    def forward(self, x):
+        """One concatenated [state | candidate] row -> [score] (the parity test uses it)."""
+        return self.score(x[:self.n_state], [x[self.n_state:]])
+
+
+def factored(spec):
+    """A candidate scorer from a spec that carries "n_state" (and "kind": "bilinear" or the
+    default "factored"); None when there are no weights."""
+    net = from_spec(spec)
+    if net is None:
+        return None
+    if spec.get("kind") == "bilinear":
+        return Bilinear(net, spec["n_state"])
+    return Factored(net, spec["n_state"])
 
 
 def from_spec(spec):

@@ -35,7 +35,12 @@ def check(name, net, spec, inputs):
     bad = 0
     for x in inputs:
         got = net.forward([int(v) for v in x])
-        want = reference(spec, x)
+        if spec.get("kind") == "bilinear":
+            n_state = spec["n_state"]
+            w = reference(spec, x[:n_state])
+            want = [int(np.dot(w, np.asarray(x[n_state:], dtype=np.int64)))]
+        else:
+            want = reference(spec, x)
         if list(got) != [int(v) for v in want]:
             bad += 1
             if bad <= 3:
@@ -44,12 +49,30 @@ def check(name, net, spec, inputs):
     return bad == 0
 
 
+def check_factored(name, net, spec, inputs):
+    """score(state, [cand]) must equal forward([state | cand]) exactly."""
+    n_state = spec["n_state"]
+    bad = 0
+    for x in inputs:
+        x = [int(v) for v in x]
+        got = net.score(x[:n_state], [x[n_state:]])
+        want = net.forward(x)
+        if list(got) != list(want):
+            bad += 1
+    print(f"{name}: factored path matches plain forward on {len(inputs) - bad}/{len(inputs)} inputs")
+    return bad == 0
+
+
 def main():
     ok = True
     rng = np.random.default_rng(1)
     rows = None
     if len(sys.argv) > 1:
-        rows = np.load(sys.argv[1])["X"]
+        d = np.load(sys.argv[1])
+        if "S" in d:          # camp dataset: concatenate the state with the first candidate
+            rows = np.concatenate([d["S"], d["C"][:, 0, :]], axis=1)
+        else:
+            rows = d["X"]
     heads = [("MODE_SELECTOR", weights.MODE_SELECTOR, weights.MODE_SELECTOR_SPEC),
              ("CAMP_SCORER", weights.CAMP_SCORER, weights.CAMP_SCORER_SPEC)]
     for name, net, spec in heads:
@@ -62,6 +85,8 @@ def main():
         if rows is not None and rows.shape[1] == n_in:
             inputs += list(rows[rng.choice(len(rows), min(2000, len(rows)), replace=False)])
         ok &= check(name, net, spec, inputs)
+        if "n_state" in spec:
+            ok &= check_factored(name, net, spec, inputs)
     print("PARITY OK" if ok else "PARITY FAILED")
     sys.exit(0 if ok else 1)
 

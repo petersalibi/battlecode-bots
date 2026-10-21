@@ -9,7 +9,24 @@ One line per body per turn, parsed by tools/build_dataset.py:
 
 Enable with config.DATALOG = True and run the harness with --debug --log-limit 16000000.
 """
+import camp_features
 import features
+
+
+def write_camp(w, turn, decider, cands, script_pick, source):
+    """One line per retarget, parsed by tools/replay_camp_dataset.py --check:
+
+        camplog r=<round> s=<slot> pick=<index the script chose, -1 none> src=<script|nn> \
+                g=<group index per candidate> S=<state hex> C=<candidate hex, '|' separated>
+    """
+    try:
+        state, rows = camp_features.build(w, turn, decider, cands)
+    except Exception as exc:
+        print("camplog-error %r" % (exc,), flush=True)
+        return
+    print("camplog r=%d s=%d pick=%d src=%s g=%s S=%s C=%s" % (
+        w.round, w.slot, script_pick, source, ",".join(str(c.group.index) for c in cands),
+        "".join("%02x" % v for v in state), "|".join("".join("%02x" % v for v in row) for row in rows)), flush=True)
 
 
 def write(w, turn, decider, mode, mask, scores, prev_mode, prev_mode_turns):

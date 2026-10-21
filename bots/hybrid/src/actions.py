@@ -193,6 +193,13 @@ class Actions:
                 d.retarget_peak = cost      # informational: the network's reserve covers acting via act_peak
             if config.PROFILE_EVERY and config.LOG_DECISIONS:
                 print("r%d %s: retarget cost %d" % (w.round, w.kind_name, cost), flush=True)
+        elif d.camp_review_round == w.round and not engaged:
+            before = fuel.remaining()
+            best = d.review_camp(turn, w)
+            d.review_cost = before - fuel.remaining()
+            if best is not None and (g is None or best.group.index != g.index):
+                g = best.group
+                d.target_group, d.target_state, d.target_bodies = g, g.state, best.bodies
         if g is None:
             # Nothing worth farming: bank gems if we have any, otherwise wait near our spawn.
             if w.gems > 0 and turn.altar() is not None:
