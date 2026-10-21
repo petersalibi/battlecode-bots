@@ -13,6 +13,7 @@ import features
 import fuel
 import nn
 import weights
+import weights_adv
 from config import FARM, CAPTURE, TRIBUTE, RECALL, FIGHT, FLEE, N_MODES
 
 MODE_SELECTOR_FUEL = 500_000      # features (reusing the script's camp scores) plus one 66-32-16-6 forward
@@ -237,7 +238,7 @@ class Decider:
         chosen, source = nn.masked_argmax(scores, mask), "script"
         if chosen is None:
             chosen = FARM
-        net = weights.MODE_SELECTOR if config.USE_NN_MODE else None
+        net = (weights_adv.MODE_SELECTOR if config.USE_ADVERSARY_WEIGHTS else weights.MODE_SELECTOR) if config.USE_NN_MODE else None
         reserve = self.nn_reserve(w)
         self.risk_score = None
         if net is not None and w.round > config.NN_SKIP_ROUNDS and fuel.can_afford(MODE_SELECTOR_FUEL, reserve):
@@ -269,7 +270,25 @@ class Decider:
                 pass
         else:
             self.risk_fleeing = False
+        if config.MODE_EXPLORE > 0:
+            explored = self._explore(w, mask, chosen)
+            if explored is not None:
+                chosen, source = explored, "explore"
         return self._set_mode(chosen, source)
+
+    def _explore(self, w, mask, chosen):
+        """Self-play exploration (data runs only): with probability MODE_EXPLORE, another legal
+        mode, so the same state is sometimes played differently and its outcome logged. A small
+        deterministic generator seeded from the salt, the round and our slot."""
+        state = (config.MODE_EXPLORE_SALT * 1000003 + w.round * 7919 + w.slot * 104729 + 12345) & 0x7FFFFFFF
+        state = (state * 1103515245 + 12345) & 0x7FFFFFFF
+        if ((state >> 8) % 1000) / 1000.0 >= config.MODE_EXPLORE:
+            return None
+        options = [m for m in range(N_MODES) if mask[m] and m != chosen]
+        if not options:
+            return None
+        state = (state * 1103515245 + 12345) & 0x7FFFFFFF
+        return options[(state >> 8) % len(options)]
 
     def _spawn_gate(self, w):
         """On spawn with enemies in sight. Hold (RECALL: heal, shop, stand off the near edge) until

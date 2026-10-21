@@ -218,6 +218,7 @@ def export(spec_layers, score_unit, margin_logits, path, note):
 
 
 def main():
+    global _LEGAL
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("data")
     ap.add_argument("-o", "--out", default=os.path.join(ROOT, "bots", "hybrid", "src", "weights.py"))
@@ -235,6 +236,7 @@ def main():
     ap.add_argument("--winners", action="store_true", help="replay data: weight the winning/higher-rated side up")
     ap.add_argument("--loser-weight", type=float, default=0.3)
     ap.add_argument("--min-rating", type=float, default=0.0, help="replay data: keep only rows of sides rated at least this")
+    ap.add_argument("--extra", nargs="*", default=[], help="more npz files to train on, as path or path:weight (self-play rows next to the ladder base)")
     args = ap.parse_args()
 
     X, mask, y, reward, test = load(args.data, args.holdout, args.min_rating)
@@ -247,6 +249,16 @@ def main():
         if (rating > 0).any():
             side *= np.clip(rating / max(rating.max(), 1.0), 0.5, 1.0)
         w = (w * side).astype(np.float32)
+    for extra in args.extra:
+        # Self-play rows: their own advantage weights (per mode, within the file) times a multiplier,
+        # legal labels only, a fresh match-level holdout.
+        path, _, mult = extra.partition(":")
+        _LEGAL = slice(None)
+        Xe, me, ye, re_, te = load(path, args.holdout, 0.0)
+        we = advantage_weights(re_, ye, args.beta, args.clip) * float(mult or 1.0)
+        print(f"extra {os.path.basename(path)}: {len(Xe)} rows at weight x{float(mult or 1.0):.2f}")
+        X = np.concatenate([X, Xe]); mask = np.concatenate([mask, me]); y = np.concatenate([y, ye])
+        w = np.concatenate([w, we.astype(np.float32)]); test = np.concatenate([test, te])
     print(f"{len(X)} rows, {X.shape[1]} features, {int(test.sum())} held out; weights mean {w.mean():.2f}")
     net = train(X, mask, y, w, test, args.epochs, args.lr, args.batch, args.seed, args.logit_l2, args.smoothing)
 

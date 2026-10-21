@@ -171,3 +171,14 @@ BUILD_STAT = {
 }
 # Jungle first: 30% less camp damage is the biggest lever in a damage race against monsters.
 SHOP_FAMILIES = ("JUNGLE", "MONSTER", "POWER", "DURABILITY", "TREASURE", "HOME", "BRUISER")
+
+# ---- self-play (tools/selfplay_modes.py) -----------------------------------------------------
+MODE_EXPLORE = 0.0          # data runs only: probability the chosen mode is swapped for another legal one
+MODE_EXPLORE_SALT = 0       # varies per sweep so the same turn explores differently
+USE_ADVERSARY_WEIGHTS = False  # the adversary profile plays the selector in weights_adv.py instead of weights.py
+
+# An exported profile (replays/selfplay/bots/<name>/src/profile.py) overrides any constant above.
+try:
+    from profile import *  # noqa: F401,F403
+except ImportError:
+    pass
