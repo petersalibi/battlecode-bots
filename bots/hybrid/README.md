@@ -141,7 +141,8 @@ beside them and die within five turns.
 they are in sight and our power is still below theirs (`OUTNUMBERED_RULE`,
 `OUTNUMBERED_STAY_BALANCE`). The ladder losses above were full-health bodies flipping from flee
 to capture beside three to five enemies. Mirror: 38-32 (+18) against v10 with deaths 940 vs 1187,
-35-35 against v9 with deaths 958 vs 1071.
+35-35 against v9 with deaths 958 vs 1071. Ladder, first hour: 12 of 25 against ranks 361-425,
+deaths per game 14.2 (v10's hour: 24.5), kills 20.8; swirl still 41 deaths with 22 near spawn.
 
 ### Dash maps: stalls (2026-10-21, v10)
 
