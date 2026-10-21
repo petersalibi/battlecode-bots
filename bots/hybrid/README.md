@@ -130,7 +130,11 @@ together instead of one at a time (swirl: full-health bodies died on the spawn t
 enemies in sight, because the spawn blocks entry, not attacks). While gated a body stands on the
 spawn tile furthest from the campers. Mirror: 34-36 against v7 (deaths 1103 vs 1154), 33-37
 against v6; the problem maps (swirl, elk arena, collision, packs, hooks) 6-4 with +98 gems and
-deaths 241 vs 301.
+deaths 241 vs 301. Ladder, first windows (`tools/fetch_ours.py`): v8 4 of 10, v9 7 of 10, v10 12
+of 20; rank 459 to 407 over the night. Near-spawn deaths fell to 2-5% of deaths in the v8 and v9
+windows, but against stronger teams (rank 363-402) swirl, collision and elk arena still cost 53
+to 56 deaths a game: full-health bodies flip from flee to capture with three to five enemies
+beside them and die within five turns.
 
 ### Dash maps: stalls (2026-10-21, v10)
 
