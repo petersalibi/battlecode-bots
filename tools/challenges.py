@@ -68,6 +68,14 @@ def cmd_queue(args):
     os.makedirs(args.out, exist_ok=True)
     state_path = os.path.join(args.out, "groups.json")
     state = load(state_path, {"groups": []})
+    if args.replay_from:
+        # Exactly the groups of an earlier run (same team, maps and sides), for paired before
+        # and after comparisons; --limit caps how many.
+        old = load(os.path.join(args.replay_from, "groups.json"), {"groups": []})["groups"]
+        done = {(g["teamId"], tuple(g["maps"]), tuple(g["sides"])) for g in state["groups"]}
+        plan = [({"name": g["team"], "teamId": g["teamId"], "rating": g.get("rating")}, g["maps"], g["sides"])
+                for g in old if (g["teamId"], tuple(g["maps"]), tuple(g["sides"])) not in done][:args.limit]
+        return _create(args, state, state_path, plan)
     if args.maps == "weak":
         maps = WEAK
     elif args.maps == "all":
@@ -76,7 +84,16 @@ def cmd_queue(args):
         maps = [m.strip() for m in args.maps.split(",") if m.strip()]
     if args.teams:
         names = set(args.teams.split(","))
-        teams = [t for t in ladder(200) if t["name"] in names or t["teamId"] in names]
+        teams = [t for t in ladder(args.ladder_depth) if t["name"] in names or t["teamId"] in names]
+    elif args.band:
+        # Teams rated between LOW and HIGH above us, spread evenly through the band.
+        lo, hi = (float(x) for x in args.band.split(","))
+        everyone = ladder(args.ladder_depth)
+        me = next(t for t in everyone if t["name"] == TEAM)
+        band = [t for t in everyone if me["rating"] + lo <= t["rating"] <= me["rating"] + hi and t["name"] != TEAM]
+        step = max(1, len(band) / max(1, args.top))
+        teams = [band[int(i * step)] for i in range(min(args.top, len(band)))]
+        print(f"us: rank {me['rank']} rating {me['rating']:.0f}; {len(band)} teams in the band, taking {len(teams)}")
     else:
         teams = [t for t in ladder(args.top + 1) if t["name"] != TEAM][:args.top]
     # The work: games are deterministic (the same two submissions on the same map and side play
@@ -97,6 +114,10 @@ def cmd_queue(args):
                 chunk.append(chunk[len(chunk) % len(chunk)])
             plan.append((t, [m for m, _ in chunk], [sd for _, sd in chunk]))
     print(f"{len(plan)} groups planned against {len(teams)} teams ({', '.join(t['name'] for t in teams)})")
+    return _create(args, state, state_path, plan)
+
+
+def _create(args, state, state_path, plan):
     bar = Progress(len(plan), "queue")
     for t, five, sides in plan:
         while len(recent(state["groups"])) >= args.quota:
@@ -212,6 +233,10 @@ def main():
     q.add_argument("-o", "--out", required=True)
     q.add_argument("--top", type=int, default=10, help="challenge the top N ladder teams")
     q.add_argument("--teams", help="comma-separated team names or ids instead of --top")
+    q.add_argument("--replay-from", help="re-queue the groups of an earlier run directory (same teams, maps, sides)")
+    q.add_argument("--limit", type=int, default=1000, help="with --replay-from: at most this many groups")
+    q.add_argument("--band", help="LOW,HIGH: teams rated this far above us (e.g. 170,230); --top of them, spread through the band")
+    q.add_argument("--ladder-depth", type=int, default=800, help="how far down the ladder to look for teams")
     q.add_argument("--maps", default="weak", help="weak, all, or comma-separated map names")
     q.add_argument("--groups-per-team", type=int, default=2)
     q.add_argument("--quota", type=int, default=QUOTA, help="groups per rolling hour")
