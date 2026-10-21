@@ -19,6 +19,7 @@ class Bot:
         self.nav = None
         self.act = None
         self.last_logged_mode = None
+        self.priority = 0             # the turn priority set last (set_priority persists)
         self.fuel_total = 0
         self.fuel_max = 0
         self.turns = 0
@@ -92,6 +93,8 @@ class Bot:
         self.act.run(mode, turn)
         memory_codec.write_claim(w.slot, self.act.status, self.act.claim_group)
         self._stall_guard(mode)
+        if config.TURN_PRIORITY:
+            self._set_priority(w, mode)
 
         now = fuel.remaining()
         used = start_fuel - now
@@ -134,6 +137,24 @@ class Bot:
             if w.fields_changed:
                 w.fields_changed = False
                 self.nav.fields.clear()
+
+    def _set_priority(self, w, mode):
+        """Turn order within the team (set_priority applies from next round and persists): a body
+        facing an enemy acts before the rest, the nearest and the most hurt first, so it hits or
+        escapes before teammates move around it. One engine call, only when the value changes."""
+        p = 0
+        if w.enemies:
+            dist = w.nearest_enemy.dist
+            if dist <= config.PRIORITY_ENEMY_RANGE:
+                p = 50 + 4 * (config.PRIORITY_ENEMY_RANGE - dist) + int(20 * (1.0 - w.hp_ratio))
+                if mode == config.FLEE or mode == config.RECALL:
+                    p += 10
+        if p != self.priority:
+            try:
+                w.me.set_priority(p)
+                self.priority = p
+            except Exception:
+                self.priority = p
 
     def _stall_guard(self, mode):
         """A body that neither moves nor acts for STUCK_TURNS turns, without meaning to wait, has

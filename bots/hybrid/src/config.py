@@ -195,6 +195,33 @@ BUILD_STAT = {
 # Jungle first: 30% less camp damage is the biggest lever in a damage race against monsters.
 SHOP_FAMILIES = ("JUNGLE", "MONSTER", "POWER", "DURABILITY", "TREASURE", "HOME", "BRUISER")
 
+# Ordered builds per champion: (family, stat, shards) bought in order; the last entry repeats for
+# as long as there is gold (stats stack; only the emblem passive does not). Taken from the top-25
+# teams' winning sides on engine 1.0.1 (item counts in the replay dumps, 2026-10-21): Treasure
+# first (20% more gold), then health for the front line and focus for the casters, Bruiser shards
+# for the rest. Our old all-strength builds ended at a third of their health (1,000 against
+# 2,000-3,600 on the same champions) and died twice as often. USE_BUILD_ORDER = False restores
+# BUILD_STAT and SHOP_FAMILIES.
+USE_BUILD_ORDER = True
+TURN_PRIORITY = True        # bodies facing an enemy act first within the team (bot._set_priority) ...
+PRIORITY_ENEMY_RANGE = 6    # ... when the nearest enemy is within this many tiles
+_FOCUS_BUILD = (("TREASURE", "FOCUS", 5), ("POWER", "FOCUS", 5), ("BRUISER", "HEALTH", 5), ("BRUISER", "FOCUS", 99))
+BUILD_ORDER = {
+    "HEART_OF_RUIN": _FOCUS_BUILD,
+    "STELLAR": _FOCUS_BUILD,
+    "PRISM": _FOCUS_BUILD,
+    "WILLOW": _FOCUS_BUILD,
+    "CASSI": (("POWER", "FOCUS", 5), ("DURABILITY", "FOCUS", 5), ("BRUISER", "HEALTH", 99)),
+    "REN": (("BRUISER", "HEALTH", 5), ("TREASURE", "STRENGTH", 5), ("DURABILITY", "HEALTH", 5), ("BRUISER", "STRENGTH", 99)),
+    "RYTH": (("TREASURE", "HEALTH", 5), ("BRUISER", "HEALTH", 5), ("DURABILITY", "HEALTH", 5), ("BRUISER", "STRENGTH", 99)),
+    "MARCELLA": (("TREASURE", "FOCUS", 5), ("JUNGLE", "STRENGTH", 5), ("BRUISER", "HEALTH", 5), ("BRUISER", "STRENGTH", 99)),
+    "VARG": (("JUNGLE", "STRENGTH", 5), ("TREASURE", "HEALTH", 5), ("BRUISER", "HEALTH", 5), ("BRUISER", "STRENGTH", 99)),
+    "VESPER_VALE": (("BRUISER", "HEALTH", 5), ("MONSTER", "STRENGTH", 5), ("TREASURE", "STRENGTH", 5), ("BRUISER", "STRENGTH", 99)),
+    "ISSAC": (("TREASURE", "STRENGTH", 5), ("POWER", "STRENGTH", 5), ("DURABILITY", "HEALTH", 5), ("POWER", "STRENGTH", 99)),
+    "VENDETTA": (("JUNGLE", "HEALTH", 5), ("TREASURE", "HEALTH", 5), ("BRUISER", "HEALTH", 5), ("BRUISER", "STRENGTH", 99)),
+    "TAVI": (("TREASURE", "STRENGTH", 5), ("JUNGLE", "HEALTH", 5), ("BRUISER", "HEALTH", 5), ("BRUISER", "STRENGTH", 99)),
+}
+
 # ---- self-play (tools/selfplay_modes.py) -----------------------------------------------------
 MODE_EXPLORE = 0.0          # data runs only: probability the chosen mode is swapped for another legal one
 MODE_EXPLORE_SALT = 0       # varies per sweep so the same turn explores differently

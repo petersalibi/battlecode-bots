@@ -506,10 +506,12 @@ class Actions:
 
     # ---- shop and ward -------------------------------------------------------------
     def shop(self):
-        """Spend gold on shards of our build stat, family by family. Works on spawn and while dead."""
+        """Spend gold on shards of our build, in order. Works on spawn and while dead."""
         w = self.w
         if w.gold < config.SHARD_COST:
             return
+        if config.USE_BUILD_ORDER and w.kind_name in config.BUILD_ORDER:
+            return self._shop_order(config.BUILD_ORDER[w.kind_name])
         me = w.me
         stat = self._build_stat()
         try:
@@ -546,16 +548,59 @@ class Actions:
         # Nothing left to buy: stop recalling home to shop.
         w.shop_exhausted = remaining_families == 0
         if bought:
-            w.events.add("stats_dirty")
+            self._after_shopping()
+
+    def _shop_order(self, order):
+        """Walk the build in order: each entry wants its shards on top of the same family and stat
+        bought by earlier entries (a shard pair already combined counts five per emblem). Buys
+        what is affordable for the first unfinished entry and stops there, so the order holds."""
+        w = self.w
+        me = w.me
+        try:
+            counts = me.item_count()
+        except Exception:
+            return
+        want = {}
+        bought = False
+        for family, stat, shards in order:
+            key = (family, stat)
+            want[key] = want.get(key, 0) + shards
+            shard = getattr(ItemType, f"{family}_SHARD_OF_{stat}", None)
+            if shard is None:
+                continue
+            emblem = getattr(ItemType, f"{family}_EMBLEM_OF_{stat}", None)
+            owned = counts[int(shard)] + (5 * counts[int(emblem)] if emblem is not None else 0)
+            need = want[key] - owned
+            if need <= 0:
+                continue
+            count = min(need, w.gold // shard.cost())
+            if count <= 0:
+                break
             try:
-                w.max_hp = me.max_health()
-                w.hp = me.health()
-                w.hp_ratio = w.hp / w.max_hp if w.max_hp else 0.0
-                w.strength = me.strength()
-                w.focus = me.focus()
-                w.dps = w._estimate_dps()
+                if me.can_buy(shard, count):
+                    me.buy(shard, count)
+                    w.gold -= count * shard.cost()
+                    bought = True
             except Exception:
                 pass
+            break
+        w.shop_exhausted = False
+        if bought:
+            self._after_shopping()
+
+    def _after_shopping(self):
+        w = self.w
+        me = w.me
+        w.events.add("stats_dirty")
+        try:
+            w.max_hp = me.max_health()
+            w.hp = me.health()
+            w.hp_ratio = w.hp / w.max_hp if w.max_hp else 0.0
+            w.strength = me.strength()
+            w.focus = me.focus()
+            w.dps = w._estimate_dps()
+        except Exception:
+            pass
 
     def _build_stat(self):
         stats = self.w.plan.get("stats") or []
