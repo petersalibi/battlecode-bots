@@ -44,7 +44,7 @@ in the order they sit behind the main decision, the mode selector.
 
 ## Ranked plan (individual components, behind the mode selector)
 
-### 1. Death memory in the camp scorer (a day)
+### 1. Death memory in the camp scorer (shipped in v8, 2026-10-21)
 
 When a body dies, record its target group in the claims board (the plan bytes already carry a
 per-body status; add the group and the round). `score_camp` multiplies a group's score by a factor
@@ -54,7 +54,7 @@ the script). Expected: fixes loss shape 1 outright. Mirror check: must not cost 
 (a camp-near-visible-enemy penalty did, because clones contest every camp; a memory of actual
 deaths should fire far less in the mirror).
 
-### 2. Spawn camp exit (two days)
+### 2. Spawn camp exit (first pass shipped in v8, 2026-10-21: far-edge stance, group break-out; the dash exit is still open)
 
 The gate is right to hold bodies, wrong to hold them on the near spawn tiles and wrong to release
 them one at a time. Pieces, in order of value:

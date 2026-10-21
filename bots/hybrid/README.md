@@ -117,7 +117,20 @@ the threats before stepping), and the capture standoff rule (`CAPTURE_FIGHT_BALA
 `CAPTURE_STANDOFF_TURNS`). Mirror sweeps of the full set: 34-36 (-52 gems) against v6 and 46-24
 (+83) against v5, level within noise; the standoff rule alone was 37-33 and 43-27. The judge is
 the ladder: v6 sat at rank 450 (1,452) with 10 wins in its last 25, losing elk arena, collision and
-contest by feeding 40 to 80 bodies a game.
+contest by feeding 40 to 80 bodies a game. v7's first 50 ranked games: 28 wins, deaths per game
+22.2 to 17.1 (`tools/ladder_deaths.py`).
+
+**v8 (2026-10-21, engine 1.0.2): death memory and the spawn camp exit.** `DEATH_MEMORY`: a group
+this body died at within 300 rounds scores half per death and is dropped after three
+(concentrated wealth on the ladder: 45 of 100 deaths on one enemy-held cluster). The gate now
+holds until the bodies on spawn have `SPAWN_BREAK_RATIO` (1.25) times the campers' power or
+`SPAWN_GATE_MAX_TURNS` (60) pass; the first body to judge it posts a break-out signal in shared
+memory byte 7 and every gated body leaves the same round in fight mode, so the team walks out
+together instead of one at a time (swirl: full-health bodies died on the spawn tiles with four
+enemies in sight, because the spawn blocks entry, not attacks). While gated a body stands on the
+spawn tile furthest from the campers. Mirror: 34-36 against v7 (deaths 1103 vs 1154), 33-37
+against v6; the problem maps (swirl, elk arena, collision, packs, hooks) 6-4 with +98 gems and
+deaths 241 vs 301.
 
 ## Team memory (`memory_codec.py`)
 
