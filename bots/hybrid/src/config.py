@@ -146,6 +146,7 @@ USE_NN_DRAFT_VALUE = True   # the draft value head in weights.DRAFT_VALUE drafts
 DRAFT_RANDOM = 0.0          # self-play exploration: probability each pick is a random allowed champion (data runs only, never submitted)
 DRAFT_RANDOM_SALT = 0       # varies per exploration sweep so the same map draws different drafts
 DRAFT_HEAD_FUEL = 8_000_000 # the map features need this much in hand (measured 3.2M on corners, 5.1M on big-world and islands): first draft turn only
+DRAFT_VALUE_FUEL = 1_500_000  # the value head's greedy planning stops when less than this is left (each step is up to ten forwards)
 DRAFT_LOG_FEATURES = False  # compute and log the map features even with every draft head off (parity checks)
 # Champions the script can play; the draft head never picks outside this set.
 DRAFT_ALLOWED = ("VENDETTA", "MARCELLA", "RYTH", "VARG", "VESPER_VALE", "HEART_OF_RUIN", "REN", "WILLOW", "TAVI", "CASSI_AND_ISSAC")

@@ -67,7 +67,10 @@ MAP_FEATURES_AT = 6 + MAX_BODIES    # byte offset of the draft head's map featur
 N_MAP_FEATURES = 22
 
 
-def encode_plan(team_size, aggression, small_map, stats, dash_map=False, map_features=None):
+PLANNED_PICKS_AT = MAP_FEATURES_AT + N_MAP_FEATURES   # the draft's planned picks (pick + 1 each, 0 = none)
+
+
+def encode_plan(team_size, aggression, small_map, stats, dash_map=False, map_features=None, planned_picks=None):
     body = bytearray(_MAGIC)
     body.append(team_size & 0xFF)
     body.append(max(0, min(255, aggression)))
@@ -78,12 +81,15 @@ def encode_plan(team_size, aggression, small_map, stats, dash_map=False, map_fea
     body.extend(bytes(MAX_BODIES - len(stats)))
     if map_features:
         body.extend(bytes(max(0, min(255, int(v))) for v in list(map_features)[:N_MAP_FEATURES]))
+    if planned_picks:
+        body.extend(bytes(MAP_FEATURES_AT + N_MAP_FEATURES - len(body)))
+        body.extend(bytes((p + 1) & 0xFF for p in list(planned_picks)[:MAX_BODIES]))
     return bytes(body)
 
 
 def decode_plan(raw):
     """Returns a dict, with defaults when the memory is empty or from another bot version."""
-    plan = {"team_size": 0, "aggression": 128, "small_map": False, "dash_map": False, "stats": [], "map_features": None}
+    plan = {"team_size": 0, "aggression": 128, "small_map": False, "dash_map": False, "stats": [], "map_features": None, "planned_picks": []}
     if len(raw) >= 6 and raw[:3] == _MAGIC:
         plan["team_size"] = raw[3]
         plan["aggression"] = raw[4]
@@ -93,6 +99,7 @@ def decode_plan(raw):
         if len(raw) >= MAP_FEATURES_AT + N_MAP_FEATURES:
             feats = list(raw[MAP_FEATURES_AT:MAP_FEATURES_AT + N_MAP_FEATURES])
             plan["map_features"] = feats if any(feats) else None
+        plan["planned_picks"] = [v - 1 for v in raw[PLANNED_PICKS_AT:PLANNED_PICKS_AT + MAX_BODIES] if v]
     return plan
 
 

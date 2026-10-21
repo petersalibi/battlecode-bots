@@ -236,24 +236,56 @@ def _explore_pick(available, chosen):
         return None
 
 
-def _value_pick(available, map_feats, chosen):
-    """Greedy pick by the draft value head: the allowed champion whose addition to the picks so
-    far gives the highest predicted gem margin for the full composition."""
+def _plan_draft(map_feats, chosen):
+    """The whole draft, greedily by the draft value head, on the first draft turn (later turns
+    have a tenth of the fuel and read the plan back): at each step the allowed champion whose
+    addition gives the highest predicted gem margin for the full composition. Stops early when
+    fuel runs short; the list fills the rest."""
     net = weights.DRAFT_VALUE if config.USE_NN_DRAFT_VALUE else None
     if net is None or map_feats is None:
-        return None
+        return []
     try:
         size = cambc.draft.team_size()
-        allowed = [getattr(Draft, n) for n in config.DRAFT_ALLOWED if getattr(Draft, n, None) in available]
-        best, best_value = None, None
-        for pick in allowed:
-            value = net.forward(draft_features.build(map_feats, list(chosen) + [pick], size))[0]
-            if best is None or value > best_value:
-                best, best_value = pick, value
-        return best
+        picks = list(chosen)
+        allowed_all = [getattr(Draft, n) for n in config.DRAFT_ALLOWED if getattr(Draft, n, None) is not None]
+        while len(picks) < size:
+            if _cambc.fuel_remaining() < config.DRAFT_VALUE_FUEL:
+                break
+            best, best_value = None, None
+            for pick in allowed_all:
+                if pick in picks:
+                    continue
+                value = net.forward(draft_features.build(map_feats, picks + [pick], size))[0]
+                if best is None or value > best_value:
+                    best, best_value = pick, value
+            if best is None:
+                break
+            picks.append(best)
+        return picks[len(chosen):]
     except Exception as error:
         print(f"draft: value head failed: {error!r}", flush=True)
-        return None
+        return []
+
+
+def _value_pick(available, map_feats, chosen):
+    """This turn's pick from the planned draft (planned on the first turn, carried in the plan)."""
+    try:
+        previous = memory_codec.decode_plan(bytes(cambc.DraftMemoryBuffer()))
+        planned = previous.get("planned_picks") or []
+    except Exception:
+        planned = []
+    if not planned:
+        planned = list(chosen) + _plan_draft(map_feats, chosen)
+        _PLANNED[:] = planned
+    else:
+        _PLANNED[:] = planned
+    index = len(chosen)
+    if index < len(planned) and planned[index] in available:
+        return planned[index]
+    return None
+
+
+_PLANNED = []
 
 
 def _net_pick(available, map_feats, chosen):
@@ -333,7 +365,7 @@ def play():
     picks = list(chosen) + [pick]
     team_size = cambc.draft.team_size()
     aggression = 170 if small_map else 90
-    plan = memory_codec.encode_plan(team_size, aggression, small_map, _body_stats(picks), dash_map, map_feats)
+    plan = memory_codec.encode_plan(team_size, aggression, small_map, _body_stats(picks), dash_map, map_feats, _PLANNED)
     cambc.draft_memory.submit(plan)
     print(f"draft: round {len(picks)}/{team_size} picked {Draft.to_string(pick) if hasattr(Draft, 'to_string') else pick} ({source})",
           flush=True)
