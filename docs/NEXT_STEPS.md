@@ -94,8 +94,10 @@ A body waiting for help at a camp it cannot clear alone fights it as soon as the
 check (`camp_overrun`) only runs below `CAMP_FLEE_HEALTH` (45%); by then walking out of the
 camp's range costs more health than is left. Running the overrun check at any health as a hard
 rule was far worse (27-43 vs v11, 23-47 vs v10, -100 gems: the formula flags most solo camp
-fights at full health). The targeted fix, backing off when hit while waiting for help, is
-`HOLD_UNDER_FIRE_LEAVES`.
+fights at full health). The targeted fix, backing off when hit while waiting for help, was worse still (19-51 vs v11,
+-179 gems): in the mirror the allies do arrive, and a body that backs off and returns never
+clears the shared camps. Both dropped. What remains is the ladder-only case of a camp fight with
+an enemy team arriving, which the outnumbered rule (v11) now covers once they are in sight.
 
 ### 4. Routing at holes (looked at 2026-10-21; still open)
 
