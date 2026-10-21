@@ -207,6 +207,32 @@ def _map_features():
         return None
 
 
+def _explore_pick(available, chosen):
+    """Self-play exploration: with probability DRAFT_RANDOM, a random allowed champion. The
+    generator is seeded from the salt, the map and our spawn, so a sweep is reproducible and the
+    next salt explores differently."""
+    if config.DRAFT_RANDOM <= 0:
+        return None
+    try:
+        spawn = game_map.spawn_region(Team.ALLY).positions()
+        anchor = spawn[0] if spawn else cambc.Vec2(0, 0)
+        state = (config.DRAFT_RANDOM_SALT * 1000003 + game_map.width() * 131 + game_map.height() * 7
+                 + anchor.x * 17 + anchor.y * 29 + len(chosen) * 1009) & 0x7FFFFFFF
+
+        def rnd():
+            nonlocal state
+            state = (state * 1103515245 + 12345) & 0x7FFFFFFF
+            return state >> 8
+        if (rnd() % 1000) / 1000.0 >= config.DRAFT_RANDOM:
+            return None
+        allowed = [getattr(Draft, n) for n in config.DRAFT_ALLOWED if getattr(Draft, n, None) in available]
+        if not allowed:
+            return None
+        return allowed[rnd() % len(allowed)]
+    except Exception:
+        return None
+
+
 def _net_pick(available, map_feats, chosen):
     """The draft head's pick among the available, allowed champions, or None."""
     net = weights.DRAFT_HEAD if config.USE_NN_DRAFT else None
@@ -268,8 +294,11 @@ def play():
     map_feats = _map_features()
 
     # Lock in a pick first, then spend the remaining fuel on the plan.
-    pick = _net_pick(available, map_feats, chosen)
-    source = "head"
+    pick = _explore_pick(available, chosen)
+    source = "random"
+    if pick is None:
+        pick = _net_pick(available, map_feats, chosen)
+        source = "head"
     if pick is None:
         pick = _choose(available, small_map, dash_map)
         source = "list"

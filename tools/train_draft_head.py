@@ -53,6 +53,7 @@ def main():
     ap.add_argument("--engine", help="weight this engine version's rows at 1, others at --old-weight")
     ap.add_argument("--old-weight", type=float, default=0.3)
     ap.add_argument("--min-rating", type=float, default=0.0)
+    ap.add_argument("--margin-weight", action="store_true", help="self-play rows: weight each draft by its gem margin (the rating column)")
     ap.add_argument("--logit-l2", type=float, default=1e-3)
     ap.add_argument("--margin", type=float, default=0.0, help="logit gap below which the priority list picks")
     ap.add_argument("--seed", type=int, default=0)
@@ -71,6 +72,10 @@ def main():
         w *= np.where(won > 0, 1.0, args.loser_weight)
     if args.engine:
         w *= np.where(engine == args.engine, 1.0, args.old_weight)
+    if args.margin_weight:
+        # A draft that won by 400 counts double, a narrow loss a fifth: the head learns the
+        # compositions our own bot wins with, not just the ones it played.
+        w *= np.clip(1.0 + rating / 400.0, 0.2, 2.0).astype(np.float32)
     # Hold out whole maps' worth of rows? No: hold out by draft (consecutive rows share a draft),
     # using a hash of (map, first pick row index) is overkill; a random 15% of rows is fine here
     # because every row is an independent pick decision given its own inputs.
