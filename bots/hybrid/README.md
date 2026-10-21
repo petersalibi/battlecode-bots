@@ -316,6 +316,32 @@ fight and escape heads let a body hold what it is sent to. What
 strong teams farm (contested middles, with escorts) is not always what a lone body of ours can
 hold, which the mirror cannot show and the ladder can.
 
+## The escape and fight heads (2026-10-21, both off)
+
+Built in the same shape as the camp scorer (bilinear, one dot product per candidate) and both
+level or worse in the mirror, so both stay behind their switches (`USE_NN_ESCAPE`,
+`USE_NN_FIGHT`); the code, data tools and weights are in place for another attempt.
+
+- **Escape head** (`escape_features.py`, `tools/replay_escape_dataset.py`,
+  `tools/train_escape_head.py`): where a fleeing body steps. Candidates are standing still and
+  the four neighbours furthest from the nearest threat; the label is survival over the next 20
+  rounds, not imitation (459K rows, held-out AUC 0.75). In play it raised deaths: 33-37 against
+  v8 with deaths 1220 vs 1054, 31-39 against v7, and a state-only bias term changed nothing. The
+  likely reason is selection: bodies that stood still with an enemy near survived because they
+  were not in danger, and a survival label on observed steps learns the situation's risk, not the
+  step's value. The first version scored nine tiles with eight engine calls each and cost 540 to
+  590 exhaustions a sweep; flee turns already carry an ally refresh and the mode selector.
+- **Fight head** (`fight_features.py`, `tools/replay_fight_dataset.py`, trained with
+  `tools/train_camp_scorer.py --head FIGHT_HEAD`): which visible enemy to attack. 178K fight rows,
+  81.6% held-out agreement against a 79.8% nearest-enemy baseline: strong teams attack the nearest
+  enemy almost always, so there was little to learn. 32-38 against v8 with equal deaths, 37-33
+  against v7.
+
+**Draft for patch 1.0.2** (same day): Vesper Vale moved up and Heart of Ruin and Ren down in both
+priority lists, after the patch cut Heart of Ruin's strength to 30 and Ren's stun damage and gave
+Vesper Vale and Vendetta more health. 41-29 (+48 gems, deaths 1130 vs 1216) against v8 and 38-32
+(+44, deaths 1047 vs 1217) against v7.
+
 ## Map pool
 
 `cambc maps pull` fails with an HTTP 303 from the platform (CLI 2.2.5). The eight maps missing from

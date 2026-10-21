@@ -70,7 +70,9 @@ them one at a time. Pieces, in order of value:
 - `power_balance` should count the enemy's items (visible in `champs[].items`) and recent
   damage taken, so four fresh bodies do not read as a match for four geared ones.
 
-### 3. Fight/flee scorer (the second network head, two to three days)
+### 3. Fight/flee scorer (built 2026-10-21 as the escape and fight heads; both off: see the README)
+
+An outcome label on observed steps learns the situation's risk, not the step's value; the next attempt needs counterfactual value (a simulator-rolled step, or regret from both sides' replays), and fight target choice barely matters (strong teams attack the nearest). What remains open from this item is the flee decision itself, which the mode selector owns.
 
 The deaths that remain after 1 and 2 are bodies already fleeing, caught by faster champions, and
 bodies that fought at parity and lost. The script's fight/flee rules are thresholds on
