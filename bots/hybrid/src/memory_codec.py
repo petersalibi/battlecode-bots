@@ -63,25 +63,36 @@ def breakout_age(round_number):
 
 # ---- Draft memory -------------------------------------------------------------
 
-def encode_plan(team_size, aggression, small_map, stats, dash_map=False):
+MAP_FEATURES_AT = 6 + MAX_BODIES    # byte offset of the draft head's map features in the plan
+N_MAP_FEATURES = 22
+
+
+def encode_plan(team_size, aggression, small_map, stats, dash_map=False, map_features=None):
     body = bytearray(_MAGIC)
     body.append(team_size & 0xFF)
     body.append(max(0, min(255, aggression)))
     body.append((1 if small_map else 0) | (2 if dash_map else 0))
-    for stat in list(stats)[:MAX_BODIES]:
+    stats = list(stats)[:MAX_BODIES]
+    for stat in stats:
         body.append(stat & 0xFF)
+    body.extend(bytes(MAX_BODIES - len(stats)))
+    if map_features:
+        body.extend(bytes(max(0, min(255, int(v))) for v in list(map_features)[:N_MAP_FEATURES]))
     return bytes(body)
 
 
 def decode_plan(raw):
     """Returns a dict, with defaults when the memory is empty or from another bot version."""
-    plan = {"team_size": 0, "aggression": 128, "small_map": False, "dash_map": False, "stats": []}
+    plan = {"team_size": 0, "aggression": 128, "small_map": False, "dash_map": False, "stats": [], "map_features": None}
     if len(raw) >= 6 and raw[:3] == _MAGIC:
         plan["team_size"] = raw[3]
         plan["aggression"] = raw[4]
         plan["small_map"] = bool(raw[5] & 1)
         plan["dash_map"] = bool(raw[5] & 2)
-        plan["stats"] = list(raw[6:6 + MAX_BODIES])
+        plan["stats"] = [v for v in raw[6:6 + MAX_BODIES]][:plan["team_size"] + 1] if plan["team_size"] else list(raw[6:6 + MAX_BODIES])
+        if len(raw) >= MAP_FEATURES_AT + N_MAP_FEATURES:
+            feats = list(raw[MAP_FEATURES_AT:MAP_FEATURES_AT + N_MAP_FEATURES])
+            plan["map_features"] = feats if any(feats) else None
     return plan
 
 

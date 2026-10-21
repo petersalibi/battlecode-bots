@@ -376,6 +376,17 @@ level or worse in the mirror, so both stay behind their switches (`USE_NN_ESCAPE
   strong teams' play says is wrong; the selector already flees where they fled. Off
   (`RISK_GATE`), weights reverted to six lanes.
 
+- **Draft head** (`draft_features.py`, `tools/fetch_drafts.py`, `tools/build_draft_dataset.py`,
+  `tools/train_draft_head.py`, `tools/retrain_draft.py`): 36 inputs (22 map features built from
+  the engine on the first draft turn and stored in the plan, the pick index, the picks so far)
+  to 12 logits, trained on 13,320 picks from the top 30 teams' 1.0.2 ranked games (held-out
+  top-1 64%). Map features match the offline ones within two units on 20 of 22. It drafts what
+  the top teams draft: Heart of Ruin first on every map, then Vesper Vale, Ryth, Marcella,
+  Vendetta. In our hands that lost 27-43 (-131 gems) against v11 and 23-47 against v10: strong
+  teams' picks suit strong teams' play, and our script plays Heart of Ruin and the dash
+  champions worse than Varg and Vendetta. Off (`USE_NN_DRAFT`). The next version should learn
+  from our own games with randomised drafts, where the label is our margin, not theirs.
+
 **Draft for patch 1.0.2** (same day): Vesper Vale moved up and Heart of Ruin and Ren down in both
 priority lists, after the patch cut Heart of Ruin's strength to 30 and Ren's stun damage and gave
 Vesper Vale and Vendetta more health. 41-29 (+48 gems, deaths 1130 vs 1216) against v8 and 38-32

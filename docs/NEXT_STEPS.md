@@ -123,6 +123,14 @@ encodes the danger, and the only thing the gate adds is more fleeing, which lost
 (the full-map truth in the dumps: unseen enemies, their items) distilled into visible features,
 and a soft use (a score adjustment the selector can outweigh), not a mask.
 
+### 4c. Draft head (built 2026-10-21 afternoon, off)
+
+Imitation of top teams' picks lost 27-43 and 23-47: their drafts suit their play. The same head
+trained on our own randomised-draft games, labelled by our gem margin, would be a bandit over
+compositions per map and is the cheapest real self-play target we have (a game's draft is one
+decision, the harness plays 1,400 games an hour, and the pipeline is built). `tools/retrain_draft.py`
+refreshes the imitation version after a patch.
+
 ### 5. Camp scorer network (built 2026-10-21, off: level in the mirror)
 
 Shipped in the code behind `USE_NN_CAMP` (bilinear, see the README). Level against v6 and v7

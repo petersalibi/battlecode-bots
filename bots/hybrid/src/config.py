@@ -141,6 +141,10 @@ CAPTURE_MEMORY_ROUNDS = 15  # trust a seen "reward available" state for this lon
 DRAFT_PRIORITY = ("VENDETTA", "MARCELLA", "RYTH", "VARG", "VESPER_VALE", "HEART_OF_RUIN", "REN",
                   "WILLOW", "STELLAR", "TAVI", "PRISM", "CASSI_AND_ISSAC")
 N_DRAFT_PICKS = 12          # ChampionDraft values 0..11 (Cassi & Issac are one pick)
+USE_NN_DRAFT = False        # the draft head in weights.DRAFT_HEAD picks from the map (draft._net_pick)
+DRAFT_HEAD_FUEL = 8_000_000 # the map features (four fields and the camp groups) need this much in hand: first draft turn only
+# Champions the script can play; the draft head never picks outside this set.
+DRAFT_ALLOWED = ("VENDETTA", "MARCELLA", "RYTH", "VARG", "VESPER_VALE", "HEART_OF_RUIN", "REN", "WILLOW", "TAVI", "CASSI_AND_ISSAC")
 # Champions whose dash crosses holes, first on maps where holes wall the camps off (starvation,
 # islands, shortcut, fracture, concentrated-wealth): a walker there has nothing to farm.
 DASH_DRAFT_PRIORITY = ("VENDETTA", "VESPER_VALE", "HEART_OF_RUIN", "CASSI_AND_ISSAC", "REN")
