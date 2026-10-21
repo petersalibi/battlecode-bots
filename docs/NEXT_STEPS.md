@@ -107,7 +107,16 @@ Only after 1 and 4, which change what the scorer should learn.
   when the enemy spawn is nearer than ours.
 - Camp reward split assumes even shares; the lowest ID gets the remainder.
 
-### 7. Fuel headroom
+### 7. Fuel headroom (open; profiled 2026-10-21)
+
+v9 exhausts 9 to 13 times per 70-game sweep (v7: 2). The exhausted turns are retargets: on
+corners, selector 0.8M + candidate rebuild and re-rank 0.75M + approach field 0.27M; on
+big-world, candidate build 0.94M (a whole-map field) + approach field 0.86M + re-rank 0.25M.
+Two attempts failed: a bigger selector reserve on retarget turns alone changed nothing (the
+big-map turns have no selector in them), and capping the approach field to the expected walk
+doubled exhaustions and stalls (capped fields that miss the body are rebuilt uncapped). The real
+fix is structural: build the candidate list from one field and reuse it for the approach, or
+spread the retarget over two turns like the camp review.
 
 Islands and lanes (40+ camp groups) sit at the 2.5M limit on bad turns and the network is
 suppressed there. Cache camp candidate scores across the RETARGET_EVERY window and skip
