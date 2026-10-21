@@ -298,7 +298,8 @@ candidates, the selector's penalties on the legal scores, winners weighted up, a
 Offline the scorer disagrees with the script on 43% of winners' rows and is right on 49% of
 those against the script's 18%, on every map. In the mirror it is level: 33-37 (+26 gems) against
 v7 and 34-36 (-28) against v6 with the 0.3-logit margin, 29-41 and 40-30 with a 1.0-logit margin,
-one fuel exhaustion in 140 games either way. What
+one fuel exhaustion in 140 games either way, so it stays off (`USE_NN_CAMP = False`) until the
+fight and escape heads let a body hold what it is sent to. What
 strong teams farm (contested middles, with escorts) is not always what a lone body of ours can
 hold, which the mirror cannot show and the ladder can.
 

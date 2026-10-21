@@ -86,7 +86,11 @@ A body whose next step is a thin hole and whose dash is on cooldown should take 
 if it is at most `cooldown` turns longer, else wait; and the camp scorer should price a route with
 a hole crossing at walking time plus the expected wait. Kills the stuck counts in loss shape 4.
 
-### 5. Camp scorer network (the third head)
+### 5. Camp scorer network (built 2026-10-21, off: level in the mirror)
+
+Shipped in the code behind `USE_NN_CAMP` (bilinear, see the README). Level against v6 and v7
+over four sweeps; its picks match strong teams far better than the script's, but a lone body
+cannot hold the camps strong teams take. Revisit after 2 and 3, or with a value head.
 
 `score_camp` is a hand formula with eight tuned constants; the ladder replays show which groups
 strong teams actually farm from where. Candidate list and labels come from `replay_features.py`.

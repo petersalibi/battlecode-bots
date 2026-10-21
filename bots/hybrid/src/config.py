@@ -89,7 +89,7 @@ WARD_REPLACE_EVERY = 40
 # ---- Networks ----------------------------------------------------------------
 DATALOG = False             # log features, scores and the chosen mode every turn (debug builds only)
 USE_NN_MODE = True          # the mode selector in weights.MODE_SELECTOR decides when it is sure and fuel allows
-USE_NN_CAMP = True         # the camp scorer in weights.CAMP_SCORER ranks the camp candidates at retargets
+USE_NN_CAMP = False        # the camp scorer in weights.CAMP_SCORER ranks the camp candidates at retargets
 CAMP_SCORER_FUEL = 90_000   # fuel per candidate (plus one) the scorer needs in hand: features + dot about 70K each, 80K tower
 NN_CAMP_TOP = 8             # the scorer re-ranks only the script's best this many candidates
 NN_MIN_MARGIN = 8           # fall back to the script when the top two scores are this close
