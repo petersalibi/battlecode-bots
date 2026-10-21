@@ -59,6 +59,7 @@ import memory_codec  # noqa: E402
 UNREACHABLE = 65535
 HORIZON = 60
 DEATH_PENALTY = 10.0
+RISK_HORIZON = 20     # the risk head's label: died within this many rounds of the turn
 ABILITY_COOLDOWN = 8
 # Step kinds in the engine's input stream (see the Cr table in the viewer bundle).
 K_TICK, K_MOVE, K_ATTACK, K_CAST, K_END, K_RECALL, K_SUBMIT, K_SHOP, K_WARD = 3, 4, 5, 6, 8, 11, 12, 13, 14
@@ -533,6 +534,7 @@ def process(path, check=None):
     # Outcome: tributes (bag drops to 0 after a submit) and collections (bag rises) in the window,
     # minus a penalty when the body dies (a turn with alive False or a respawn timer) in the window.
     reward = np.zeros(len(X), dtype=np.float32)
+    died20 = np.zeros(len(X), dtype=np.int8)
     for key, items in seq.items():
         rounds = [r for r, _, _, _ in items]
         gems = [g for _, _, g, _ in items]
@@ -554,7 +556,8 @@ def process(path, check=None):
                 k += 1
             died = any(r < dr <= r + HORIZON for dr in deaths)
             reward[idx] = (0 if died else tributed) + 0.5 * collected - (DEATH_PENALTY if died else 0)
-    out = dict(X=np.stack(X), mask=np.array(mask, dtype=np.bool_), y=np.array(y, dtype=np.int8), reward=reward,
+            died20[idx] = 1 if any(r < dr <= r + RISK_HORIZON for dr in deaths) else 0
+    out = dict(X=np.stack(X), mask=np.array(mask, dtype=np.bool_), y=np.array(y, dtype=np.int8), reward=reward, died20=died20,
                meta=np.array(meta, dtype=np.int32))
     if check:
         compare(out, check)
@@ -645,6 +648,7 @@ def main():
     if parts and not args.check:
         X = np.concatenate([p["X"] for p in parts]); mask = np.concatenate([p["mask"] for p in parts])
         y = np.concatenate([p["y"] for p in parts]); reward = np.concatenate([p["reward"] for p in parts])
+        died20 = np.concatenate([p["died20"] for p in parts])
         meta = np.concatenate([p["meta"] for p in parts])
         match_id = np.concatenate([np.full(len(p["X"]), i, dtype=np.int32) for i, p in enumerate(parts)])
         rating = np.concatenate([np.array([side_info[i][int(team)][0] for team in p["meta"][:, 6]], dtype=np.float32) for i, p in enumerate(parts)])
@@ -652,8 +656,8 @@ def main():
         if args.winners_only:
             keep = won > 0
             print(f"keeping the {int(keep.sum())} rows of winning sides out of {len(keep)}")
-            X, mask, y, reward, meta, match_id, rating, won = (a[keep] for a in (X, mask, y, reward, meta, match_id, rating, won))
-        np.savez_compressed(args.out, X=X, mask=mask, y=y, reward=reward, meta=meta, match_id=match_id, rating=rating, won=won,
+            X, mask, y, reward, meta, match_id, rating, won, died20 = (a[keep] for a in (X, mask, y, reward, meta, match_id, rating, won, died20))
+        np.savez_compressed(args.out, X=X, mask=mask, y=y, reward=reward, died20=died20, meta=meta, match_id=match_id, rating=rating, won=won,
                             scores=np.zeros((len(X), config.N_MODES), dtype=np.float32))
         if args.index:
             print("rows from winning sides: %d%%, mean rating %.0f" % (100 * won.mean(), rating[rating > 0].mean() if (rating > 0).any() else 0))

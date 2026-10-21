@@ -46,6 +46,8 @@ class Decider:
         self.was_alive = True
         self.camp_source = "script"   # who ranked the camps at the last retarget
         self.gated_since = -1         # round the spawn gate started holding this body, or -1
+        self.risk_score = None        # the selector's death-risk lane this turn (None when it did not run)
+        self.risk_fleeing = False     # fleeing on the risk lane: stays until the lane drops below the lower threshold
         self.escape_source = "script" # who chose the last flee step
         self.fight_source = "script"  # who chose the last fight target
         self.breakout_round = -1      # round this body joined a break-out
@@ -237,15 +239,36 @@ class Decider:
             chosen = FARM
         net = weights.MODE_SELECTOR if config.USE_NN_MODE else None
         reserve = self.nn_reserve(w)
+        self.risk_score = None
         if net is not None and w.round > config.NN_SKIP_ROUNDS and fuel.can_afford(MODE_SELECTOR_FUEL, reserve):
             try:
                 net_scores = net.forward(features.build(w, turn, self, rescore=False))
+                risk_limit = getattr(weights, "MODE_SELECTOR_RISK", None)
+                if config.RISK_GATE and risk_limit is not None and len(net_scores) > N_MODES and not w.at_spawn:
+                    self.risk_score = net_scores[N_MODES]
+                    stay = getattr(weights, "MODE_SELECTOR_RISK_STAY", risk_limit)
+                    limit = stay if self.risk_fleeing else risk_limit
+                    if self.risk_score >= limit and (mask[FLEE] or mask[RECALL]):
+                        # Too likely to die here in the next twenty rounds: only flee or recall.
+                        safe = [False] * N_MODES
+                        safe[FLEE], safe[RECALL] = mask[FLEE], mask[RECALL]
+                        mask = safe
+                        self.last_mask = mask
+                        self.risk_fleeing = True
+                        chosen = nn.masked_argmax(scores, mask)
+                        if chosen is None:
+                            chosen = FLEE
+                        source = "risk"
+                    else:
+                        self.risk_fleeing = False
                 if nn.margin(net_scores, mask) >= getattr(weights, "MODE_SELECTOR_MARGIN", config.NN_MIN_MARGIN):
                     pick = nn.masked_argmax(net_scores, mask)
                     if pick is not None:
-                        chosen, source = pick, "nn"
+                        chosen, source = pick, "nn" if source != "risk" else "risk"
             except Exception:
                 pass
+        else:
+            self.risk_fleeing = False
         return self._set_mode(chosen, source)
 
     def _spawn_gate(self, w):

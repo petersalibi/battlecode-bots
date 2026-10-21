@@ -366,6 +366,16 @@ level or worse in the mirror, so both stay behind their switches (`USE_NN_ESCAPE
   enemy almost always, so there was little to learn. 32-38 against v8 with equal deaths, 37-33
   against v7.
 
+- **Death-risk lane** (`tools/train_risk_probe.py`, same day): a linear probe on the shipped
+  selector's 16 hidden activations predicting death within 20 rounds, trained on 1.7M turns of
+  both sides of the top-25 games (held-out AUC 0.78), appended as a seventh output lane so the six
+  mode lanes stay bit-identical, and used as a gate: above a threshold only flee and recall are
+  allowed. At a threshold flagging 25% of turns: 14-56 (-411 gems); flagging the riskiest 5%:
+  17-53 (-221) with our own deaths up (829 vs 568). The readout is a function of the same trunk
+  the selector already uses, so it adds no information, only a policy response (flee more) that
+  strong teams' play says is wrong; the selector already flees where they fled. Off
+  (`RISK_GATE`), weights reverted to six lanes.
+
 **Draft for patch 1.0.2** (same day): Vesper Vale moved up and Heart of Ruin and Ren down in both
 priority lists, after the patch cut Heart of Ruin's strength to 30 and Ren's stun damage and gave
 Vesper Vale and Vendetta more health. 41-29 (+48 gems, deaths 1130 vs 1216) against v8 and 38-32

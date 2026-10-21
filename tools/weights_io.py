@@ -34,3 +34,21 @@ def write_head(path, name, spec_layers, margin, margin_note, note, extra=None):
         text = text.replace('"""\nimport nn', note_line + '\n"""\nimport nn', 1)
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
+
+
+def write_line(path, name, value, note):
+    """Set a top-level `<name> = <value>   # note` line in weights.py (added after the matching
+    head's _MARGIN line when it does not exist yet)."""
+    text = open(path, encoding="utf-8").read()
+    line = "%s = %r   # %s\n" % (name, value, note)
+    text, n = re.subn(r"^%s = .*\n" % name, lambda m: line, text, count=1, flags=re.M)
+    if n == 0:
+        parts = name.split("_")
+        for cut in range(len(parts) - 1, 0, -1):
+            head = "_".join(parts[:cut])
+            text, n = re.subn(r"(^%s_MARGIN = .*\n)" % head, lambda m: m.group(1) + line, text, count=1, flags=re.M)
+            if n:
+                break
+        assert n == 1, f"no _MARGIN line to anchor {name} in {path}"
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)

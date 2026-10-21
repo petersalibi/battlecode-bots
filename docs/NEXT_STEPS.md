@@ -115,6 +115,14 @@ A body whose next step is a thin hole and whose dash is on cooldown should take 
 if it is at most `cooldown` turns longer, else wait; and the camp scorer should price a route with
 a hole crossing at walking time plus the expected wait. Kills the stuck counts in loss shape 4.
 
+### 4b. Death-risk head (built 2026-10-21 afternoon, off)
+
+A risk readout from the selector's own trunk cannot beat the selector's policy: the trunk already
+encodes the danger, and the only thing the gate adds is more fleeing, which lost 17-53 even at a
+5% flag rate. If risk is to help it must bring new information, which means a privileged teacher
+(the full-map truth in the dumps: unseen enemies, their items) distilled into visible features,
+and a soft use (a score adjustment the selector can outweigh), not a mask.
+
 ### 5. Camp scorer network (built 2026-10-21, off: level in the mirror)
 
 Shipped in the code behind `USE_NN_CAMP` (bilinear, see the README). Level against v6 and v7
