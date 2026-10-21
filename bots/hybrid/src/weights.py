@@ -5,6 +5,8 @@ packed at import time, which is build time, so they cost no match fuel.
 
 Trained 2026-10-20 20:40 on 484445 rows (beta 0.50, 30 epochs); held-out agreement with the script 89.7%.
 CAMP_SCORER: bilinear, trained 2026-10-21 02:58 on 242647 rows (30 epochs, beta 0.50); held-out top-1 60.4% vs nearest-candidate 48.1%
+FIGHT_HEAD: bilinear, trained 2026-10-21 04:22 on 146847 rows (30 epochs, beta 0.50); held-out top-1 81.6% vs nearest-candidate 79.8%
+ESCAPE_HEAD: bilinear survival head, trained 2026-10-21 04:35 on 389213 flee rows (30 epochs)
 """
 import nn
 
@@ -28,4 +30,19 @@ CAMP_SCORER_SPEC = {"n_state": 20, "kind": 'bilinear', "layers": [
 CAMP_SCORER_MARGIN = 1001439   # integer score gap equal to 0.3 logits; below it the script's camp choice stands
 
 MODE_SELECTOR = nn.from_spec(MODE_SELECTOR_SPEC)
+ESCAPE_HEAD_SPEC = {"n_state": 12, "kind": 'bilinear', "layers": [
+    {"n_in": 12, "n_out": 12, "mult": 1, "shift": 0,
+     "bias": [13039, -18352, -15316, 6130, 16978, 5706, 3382, -8138, -1354, 9542, 3332, -7715],
+     "weights": b'\xcd+\x03\x16 (\x07\xe7&\x1b#\xdbk\xf1\xf4\xf1\xfa\xdf\xdc\x1d\xde\xf2\xe2\x11\x7f\xcb\xe9\xe5\xed\x0b\xbf\x0e\xeb\xda\xb8\x0e\xce!\x08\xf9\xe8\x0e\x13\xfd\r\x06\x03\xef\xd68\x06\x14@\x1a\x04\xf2\x073\xe8\xea\'\x18\x00\xf71\xe5\xdc\xfc\x106\x89\xee\x12T\xfa\xfe;\xee\xc7\x00\xee"(\xe1I\xd0\x00\xaf5\xe9\x03\n\xf0\x08\xed\xf0,3\xf0\xe1\xaf\x0c\xde\x07\x11\xd0\x0e\x08\x045\xf8\xff1\n\xdd\xff\xf6\x1c\x18\xeb\x0e\xf6\xefJ\xba^\xd1\xf4\xfd\xfb\xfd\xfe@*\x0c\xe7W\xc3\x06\x02\xf7\xee\x14\xdd'}
+]}
+ESCAPE_HEAD_MARGIN = 0   # survival-logit gap equal to 0.0 logits; below it the script steps
+FIGHT_HEAD_SPEC = {"n_state": 12, "kind": 'bilinear', "layers": [
+    {"n_in": 12, "n_out": 12, "mult": 1, "shift": 0,
+     "bias": [-9861, -17760, 11008, -50511, 17488, 9553, 9880, 7965, 15092, -3426, 4821, 3529],
+     "weights": b'\x0f\xfc\xea\'\xc5\xf8\xe8\xfe\xe9\t\xd6\xfa\xdd\xf5\x03\x00\xd8\xf7\xd2\xfe\xed\xbd\xfe\xec!\x11\xf2\xeb\x1b\x11.\x08\xf8\xff\x08\x1c\x81\xab\xe1\xc9\x87\xbd\x87\xf9\x01\x08\xd2\xbc\xec\xf9\x1b\xdaX\x17\xdc\x07.)/\xe2$\x02\x07\x04\n\x0b\x0e\xea\x01\x0b\x07\xfa\x1d\x1a\x0f\x01=\x00\xfc\xfc\xf8\xe82\x13\x1e\x10\xfd\x04\xe7\x13*\x00\n"\x01\x14+\xef\xd8-\x04\xf7\n\x0e\xbb\xdf\xba\x13\xeb\x02\xf4\x0e\xfc\x17\xdc\x05\xe4\x15\x1d\xe6/\xed\xf0\xeb\xde*\xc3\x02\xe9\xf3\x05\x08\r\x03\x02\x02\x03\x0c\x0e\x01\x00\x14\x01\x00'}
+]}
+FIGHT_HEAD_MARGIN = 1256631   # integer score gap equal to 0.3 logits; below it the script's camp choice stands
+
 CAMP_SCORER = nn.factored(CAMP_SCORER_SPEC)
+ESCAPE_HEAD = nn.factored(ESCAPE_HEAD_SPEC)
+FIGHT_HEAD = nn.factored(FIGHT_HEAD_SPEC)

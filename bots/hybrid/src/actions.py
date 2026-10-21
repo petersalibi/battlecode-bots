@@ -5,6 +5,10 @@ Everything here is exact and cheap in the SDK's native helpers, so nothing is le
 import cambc
 
 import config
+import escape_features
+import fuel
+import nn
+import weights
 import fuel
 import memory_codec
 import world as W
@@ -414,11 +418,49 @@ class Actions:
                 self._cast(rec, nearest.champion)
                 break
         dashed = config.FLEE_DASH_AWAY and self.nav.dash_away(threats, w.spawn_field)
-        moved = self.nav.step_away(threats, w.spawn_field)
+        moved = self._escape_step(threats)
+        if moved is None:
+            moved = self.nav.step_away(threats, w.spawn_field)
         if dashed or self.nav.try_dash(w.spawn_field):
             return
         if not moved and nearest.dist <= w.attack_range:
             self._attack_with_reset(nearest.champion, nearest.pos)
+
+    def _escape_step(self, threats):
+        """The escape head's step: the candidate tile (stand still or a free neighbour) with the
+        highest survival score, when the head is on, affordable and sure. Returns True/False for
+        moved, or None when the script should decide."""
+        w, d = self.w, self.d
+        net = weights.ESCAPE_HEAD if config.USE_NN_ESCAPE else None
+        if net is None or not w.can_move or w.cast_exclusive or w.round <= config.NN_SKIP_ROUNDS:
+            return None
+        if not fuel.can_afford(config.ESCAPE_FUEL, d.camp_reserve(w)):
+            return None
+        try:
+            blocked = self.nav.blocked()
+            cands = [(tile, stay) for tile, stay in escape_features.candidates(w) if stay or not blocked.is_set(tile)]
+            if len(cands) < 2:
+                return None
+            if len(cands) > config.ESCAPE_TOP + 1:
+                # Standing still plus the neighbours furthest from the nearest threat.
+                stay = cands[0]
+                steps = sorted(cands[1:], key=lambda c: -min(c[0].chebyshev_distance(t) for t in threats))
+                cands = [stay] + steps[:config.ESCAPE_TOP]
+            state, rows = escape_features.build(w, d, cands)
+            scores = net.score(state, rows)
+            ok = [True] * len(cands)
+            if nn.margin(scores, ok) < getattr(weights, "ESCAPE_HEAD_MARGIN", 0):
+                return None
+            pick = nn.masked_argmax(scores, ok)
+            if pick is None:
+                return None
+            d.escape_source = "nn"
+            tile, stay = cands[pick]
+            if stay:
+                return False
+            return self.nav._move(tile)
+        except Exception:
+            return None
 
     # ---- shop and ward -------------------------------------------------------------
     def shop(self):

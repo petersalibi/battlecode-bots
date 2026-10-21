@@ -7,6 +7,7 @@ or is unsure, the script decides.
 """
 import camp_features
 import config
+import fight_features
 import datalog
 import features
 import fuel
@@ -45,6 +46,8 @@ class Decider:
         self.was_alive = True
         self.camp_source = "script"   # who ranked the camps at the last retarget
         self.gated_since = -1         # round the spawn gate started holding this body, or -1
+        self.escape_source = "script" # who chose the last flee step
+        self.fight_source = "script"  # who chose the last fight target
         self.breakout_round = -1      # round this body joined a break-out
 
     def record_death(self, round_number):
@@ -420,11 +423,29 @@ class Decider:
 
     # ---- fights --------------------------------------------------------------------
     def choose_fight_target(self, turn, w):
-        """Lowest health first, gems as a tiebreak, in-range preferred."""
+        """Lowest health first, gems as a tiebreak, in-range preferred; the fight head re-ranks
+        the visible enemies when it is on, affordable and sure."""
         best, best_key = None, None
-        for enemy in turn.fight_targets():
+        targets = list(turn.fight_targets())
+        for enemy in targets:
             in_range = enemy.dist <= w.attack_range
             key = (1 if in_range else 0, -(enemy.hp / max(enemy.max_hp, 1)), enemy.gems, -enemy.dist)
             if best_key is None or key > best_key:
                 best, best_key = enemy, key
+        self.fight_source = "script"
+        net = weights.FIGHT_HEAD if config.USE_NN_FIGHT else None
+        if net is not None and len(targets) >= 2 and w.round > config.NN_SKIP_ROUNDS \
+                and fuel.can_afford(config.FIGHT_FUEL, self.camp_reserve(w)):
+            try:
+                enemies = sorted(targets, key=lambda e: e.dist)[:config.FIGHT_HEAD_MAX]
+                state, rows = fight_features.build(w, self, enemies)
+                scores = net.score(state, rows)
+                ok = [True] * len(enemies)
+                if nn.margin(scores, ok) >= getattr(weights, "FIGHT_HEAD_MARGIN", 0):
+                    pick = nn.masked_argmax(scores, ok)
+                    if pick is not None:
+                        best = enemies[pick]
+                        self.fight_source = "nn"
+            except Exception:
+                pass
         return best

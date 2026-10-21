@@ -24,7 +24,8 @@ def state(w, decider):
     x[4] = clip(16 * e.dist) if e is not None else 255
     x[5] = clip(255 * e.hp / max(e.max_hp, 1)) if e is not None else 0
     x[6] = clip(e.strength / 2) if e is not None else 0
-    x[7] = 255 if w.has_dash and w.can_cast and w.cooldowns[_dash_slot(w)] == 0 else 0
+    cooldowns = getattr(w, "cooldowns", None) or [0, 0]
+    x[7] = 255 if w.has_dash and w.can_cast and cooldowns[_dash_slot(w)] == 0 else 0
     x[8] = 255 if w.is_ranged else 0
     x[9] = clip(w.gems)
     x[10] = turns(w.turns_to_spawn)
@@ -78,7 +79,7 @@ def build(w, decider, cands):
             x[5] = clip(128 + 32 * (altar_here - af)) if af < UNREACHABLE and altar_here < UNREACHABLE else 0
         else:
             x[5] = 128
-        x[6] = clip(32 * w.walkable_neighbours(tile))
+        x[6] = 255                                 # constant: lets the state tower carry the situation's own risk (a bilinear score has no state-only term)
         x[7] = clip(16 * min(tile.chebyshev_distance(a) for a in allies)) if allies else 255
         x[8] = 255 if is_stay else 0
         x[9] = clip(128 + 32 * (d - here_d))

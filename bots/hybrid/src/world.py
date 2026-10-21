@@ -644,6 +644,24 @@ class World:
     def enemy_within(self, distance):
         return self.nearest_enemy is not None and self.nearest_enemy.dist <= distance
 
+    def make_tile(self, x, y):
+        return cambc.Vec2(x, y)
+
+    def altar_field_or_none(self):
+        return self.altar_field
+
+    def walkable_neighbours(self, tile):
+        """Neighbouring tiles that are not terrain-blocked: a body's ways out of a tile."""
+        n = 0
+        blocked = self.static_blocked
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                if dx or dy:
+                    x, y = tile.x + dx, tile.y + dy
+                    if 0 <= x < self.width and 0 <= y < self.height and not blocked.is_set(cambc.Vec2(x, y)):
+                        n += 1
+        return n
+
     def spawn_power_balance(self):
         """Power of the bodies on our spawn (ours included) over every visible enemy's."""
         if self.enemy_power <= 0:

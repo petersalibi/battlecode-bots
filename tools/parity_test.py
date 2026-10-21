@@ -69,12 +69,15 @@ def main():
     rows = None
     if len(sys.argv) > 1:
         d = np.load(sys.argv[1])
-        if "S" in d:          # camp dataset: concatenate the state with the first candidate
-            rows = np.concatenate([d["S"], d["C"][:, 0, :]], axis=1)
+        if "S" in d:          # candidate dataset: concatenate the state with a candidate
+            C = d["C"]
+            rows = np.concatenate([d["S"], C[:, 0, :] if C.ndim == 3 else C], axis=1)
         else:
             rows = d["X"]
     heads = [("MODE_SELECTOR", weights.MODE_SELECTOR, weights.MODE_SELECTOR_SPEC),
-             ("CAMP_SCORER", weights.CAMP_SCORER, weights.CAMP_SCORER_SPEC)]
+             ("CAMP_SCORER", weights.CAMP_SCORER, weights.CAMP_SCORER_SPEC),
+             ("ESCAPE_HEAD", getattr(weights, "ESCAPE_HEAD", None), getattr(weights, "ESCAPE_HEAD_SPEC", None)),
+             ("FIGHT_HEAD", getattr(weights, "FIGHT_HEAD", None), getattr(weights, "FIGHT_HEAD_SPEC", None))]
     for name, net, spec in heads:
         if net is None:
             print(f"{name}: no weights")
