@@ -142,6 +142,7 @@ class World:
         self.prev_hp = None
         self.enemy_memory = {}         # handle -> (pos, round, hp_ratio)
         self._spawn_centers = None
+        self.spawn_field_stale = False     # navigation.seal_holes: rebuild the spawn field when affordable
         self.last_enemy_round = -10_000
         self.last_enemy_pos = None
         self.enemies_killed = []       # rounds at which an enemy was seen to die
@@ -381,6 +382,11 @@ class World:
     # ---- every turn --------------------------------------------------------------
     def refresh(self):
         me = self.me
+        if self.spawn_field_stale and fuel.can_afford(config.FIELD_COST_PER_TILE * self.width * self.height, config.FIELD_BUILD_RESERVE):
+            self.spawn_field_stale = False
+            field = DistanceField()
+            field.compute(self.static_blocked, self.spawn_ally, Bitboard())
+            self.spawn_field = field
         self.events = set()
         self.moved = False
         self.cast_exclusive = False

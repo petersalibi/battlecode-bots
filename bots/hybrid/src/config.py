@@ -118,6 +118,7 @@ FIELD_COST_PER_TILE = 80        # a DistanceField over the map costs about this 
                                 # fields are only built when that much plus the reserve is in hand
 FIELD_BUILD_RESERVE = 1_000_000 # fuel that must remain after building an optional field mid-turn
 THIN_HOLES_COST = 150_000       # bitboard shifts that find the holes a dash can cross (~130K at 80x80)
+HOLE_FAIL_LIMIT = 3         # failed hole crossings with the dash ready before the hole is treated as a wall
 DASH_ROUTES = True              # champions with a dash route across thin holes (fields treat them as passable)
 DASH_SQUARE_LANDINGS = True     # dash landings from the ability's range square (crosses holes) instead of walked tiles
 STUCK_TURNS = 10            # turns without a move or an action before a body drops its target ...

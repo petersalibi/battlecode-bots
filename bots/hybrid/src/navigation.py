@@ -15,6 +15,8 @@ DistanceField = cambc.DistanceField
 
 
 class Navigator:
+    hole_failures = 0
+
     def __init__(self, world):
         self.w = world
         self.fields = {}
@@ -119,16 +121,23 @@ class Navigator:
                     return True
             elif w.has_dash and w.thin_holes.is_set(dest):
                 through_hole = True
-        if through_hole and self.try_dash(field, min_gain=1):
-            # Dashing and walking are compatible: keep going from the landing tile.
-            here = field.get(w.pos)
-            if here == 0:
-                return True
-            for delta in field.next_moves_from(w.pos):
-                dest = w.pos + delta
-                if not blocked.is_set(dest) and self._move(dest):
+        if through_hole:
+            if self.try_dash(field, min_gain=1):
+                # Dashing and walking are compatible: keep going from the landing tile.
+                here = field.get(w.pos)
+                if here == 0:
                     return True
-            return True
+                for delta in field.next_moves_from(w.pos):
+                    dest = w.pos + delta
+                    if not blocked.is_set(dest) and self._move(dest):
+                        return True
+                return True
+            if self.dash_ready():
+                self.hole_failures += 1
+                if self.hole_failures >= config.HOLE_FAIL_LIMIT:
+                    self.hole_failures = 0
+                    self.seal_holes(field)
+                    return False
         # Every optimal step is occupied: take any reachable tile that still improves, or failing
         # that a sideways tile of equal distance that has a free step of its own (so a body blocked
         # by a unit walks round it instead of waiting). Never the tile we just left.
@@ -164,6 +173,35 @@ class Navigator:
             if best_key is None or key > best_key:
                 best, best_key = tile, key
         return best is not None and best != w.pos and self._move(best)
+
+    def dash_ready(self):
+        """A dash ability off cooldown, with a cast still available this turn."""
+        w = self.w
+        if not w.can_cast or w.cast_exclusive:
+            return False
+        for rec in w.abilities:
+            if rec.is_dash:
+                try:
+                    return rec.ability.cooldown() == 0
+                except Exception:
+                    return False
+        return False
+
+    def seal_holes(self, field):
+        """The thin holes on the route's next steps become walls for this body: the crossing
+        failed with the dash ready, so the route must go round. Cached fields are dropped."""
+        w = self.w
+        sealed = 0
+        for delta in field.next_moves_from(w.pos):
+            dest = w.pos + delta
+            if w.thin_holes.is_set(dest):
+                w.thin_holes.set(dest, False)
+                w.static_blocked.set(dest, True)
+                sealed += 1
+        if sealed:
+            self.fields.clear()
+            w.spawn_field_stale = True
+            print("r%d %s: sealed %d hole(s) at %d,%d after failed dashes" % (w.round, w.kind_name, sealed, w.pos.x, w.pos.y), flush=True)
 
     def try_dash(self, field, min_gain=2):
         """Use a dash ability to skip ahead along the field, over a hole if that is the way.
