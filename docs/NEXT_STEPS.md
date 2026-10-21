@@ -82,7 +82,17 @@ replays: the label is what the winning side's bodies did in that situation and w
 through the next 20 rounds. `replay_features.py` reconstructs all of those inputs already; the
 recipe is the mode selector's (inputs in [0, 1], penalties on legal logits only, parity test).
 
-### 4. Routing at holes (a day)
+### 4. Routing at holes (looked at 2026-10-21; still open)
+
+Hole sealing after three failed crossings with the dash ready fires a few times a game but the
+stalls stay (fracture 51, islands 36-50, concentrated wealth 25-43 a game). Dumps show three
+shapes: a body inside a wide hole field dashing one thin hole per cooldown and idling between
+(fracture, 35,45 and 17,43), bodies walled off from an embedded group by another group's camps
+(concentrated wealth 27,29; the clearing fallback now hits what is in range), and a body
+targeting a group it has walked to that is already dead (fracture r283: `alive []`). Pieces:
+save the dash for hole crossings when the route ahead has one within a few steps (today
+`try_dash` spends it on any two-tile gain), let the stall guard ignore turns spent waiting on the
+dash cooldown at a hole, and re-check the target's state on arrival.
 
 A body whose next step is a thin hole and whose dash is on cooldown should take the walking route
 if it is at most `cooldown` turns longer, else wait; and the camp scorer should price a route with
