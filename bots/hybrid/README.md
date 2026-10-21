@@ -143,6 +143,8 @@ they are in sight and our power is still below theirs (`OUTNUMBERED_RULE`,
 to capture beside three to five enemies. Mirror: 38-32 (+18) against v10 with deaths 940 vs 1187,
 35-35 against v9 with deaths 958 vs 1071. Ladder, first hour: 12 of 25 against ranks 361-425,
 deaths per game 14.2 (v10's hour: 24.5), kills 20.8; swirl still 41 deaths with 22 near spawn.
+After three hours: 48 of 85, deaths 14.6 vs 18.7 per game, rank 358 (1,507); the night began at
+rank 459 (1,440).
 
 ### Dash maps: stalls (2026-10-21, v10)
 
