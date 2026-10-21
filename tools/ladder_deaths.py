@@ -71,6 +71,10 @@ def game_deaths(path, our_team):
 
 
 def main():
+    try:
+        sys.stdout.reconfigure(errors="replace")   # team names with characters outside the console's code page
+    except Exception:
+        pass
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("folder")
     ap.add_argument("--index", required=True, help="index.json from fetch (match -> teams/side/result)")
