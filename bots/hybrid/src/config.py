@@ -133,12 +133,12 @@ CAPTURE_MEMORY_ROUNDS = 15  # trust a seen "reward available" state for this lon
 # Vendetta has the top strength and resets on camp kills, Marcella now earns gold per gem
 # tributed and is stun-immune, Ryth and Heart of Ruin are durable melee with stuns, Varg's
 # splash still clears packs. Ranged picks last: they cannot move and shoot.
-DRAFT_PRIORITY = ("VENDETTA", "MARCELLA", "RYTH", "VARG", "HEART_OF_RUIN", "REN", "VESPER_VALE",
+DRAFT_PRIORITY = ("VENDETTA", "MARCELLA", "RYTH", "VARG", "VESPER_VALE", "HEART_OF_RUIN", "REN",
                   "WILLOW", "STELLAR", "TAVI", "PRISM", "CASSI_AND_ISSAC")
 N_DRAFT_PICKS = 12          # ChampionDraft values 0..11 (Cassi & Issac are one pick)
 # Champions whose dash crosses holes, first on maps where holes wall the camps off (starvation,
 # islands, shortcut, fracture, concentrated-wealth): a walker there has nothing to farm.
-DASH_DRAFT_PRIORITY = ("VENDETTA", "HEART_OF_RUIN", "REN", "VESPER_VALE", "CASSI_AND_ISSAC")
+DASH_DRAFT_PRIORITY = ("VENDETTA", "VESPER_VALE", "HEART_OF_RUIN", "CASSI_AND_ISSAC", "REN")
 DASH_MAP_RATIO = 2          # a map is a "dash map" when dashes at least double the camps within reach
 DASH_MAP_FUEL = 4_000_000   # the dash-map check (two fields plus the camp groups) needs this much in hand
 SMALL_MAP_TILES = 40 * 40   # maps smaller than this are "small": more contact, more aggression
