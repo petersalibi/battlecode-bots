@@ -87,6 +87,16 @@ replays: the label is what the winning side's bodies did in that situation and w
 through the next 20 rounds. `replay_features.py` reconstructs all of those inputs already; the
 recipe is the mode selector's (inputs in [0, 1], penalties on legal logits only, parity test).
 
+### 3b. Camp deaths (swirl, 2026-10-21)
+
+A body waiting for help at a camp it cannot clear alone fights it as soon as the camp hits it
+(`farm`: the hold only applies while `damage_taken <= 0`), takes 120 a turn, and the overrun
+check (`camp_overrun`) only runs below `CAMP_FLEE_HEALTH` (45%); by then walking out of the
+camp's range costs more health than is left. Running the overrun check at any health as a hard
+rule was far worse (27-43 vs v11, 23-47 vs v10, -100 gems: the formula flags most solo camp
+fights at full health). The targeted fix, backing off when hit while waiting for help, is
+`HOLD_UNDER_FIRE_LEAVES`.
+
 ### 4. Routing at holes (looked at 2026-10-21; still open)
 
 Hole sealing after three failed crossings with the dash ready fires a few times a game but the
