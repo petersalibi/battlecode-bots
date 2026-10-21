@@ -327,6 +327,10 @@ class Actions:
         self.status = memory_codec.STATUS_BUSY
         if w.at_spawn:
             self.shop()
+            if w.enemies and config.SPAWN_GATE:
+                tile = w.spawn_tile_away([e.pos for e in w.enemies])
+                if tile is not None and not self.nav.blocked().is_set(tile):
+                    self.nav._move(tile)
             return
         if w.turns_to_spawn <= config.RECALL_MIN_SPAWN_TURNS:
             self.nav.step_along(w.spawn_field)

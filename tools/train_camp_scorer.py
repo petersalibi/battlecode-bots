@@ -150,6 +150,7 @@ def main():
     ap.add_argument("--loser-weight", type=float, default=0.3)
     ap.add_argument("--min-rating", type=float, default=0.0)
     ap.add_argument("--no-export", action="store_true")
+    ap.add_argument("--head", default="CAMP_SCORER", help="weights.py head to write (CAMP_SCORER or FIGHT_HEAD: same row layout)")
     ap.add_argument("--arch", choices=("bilinear", "tower"), default="tower")
     ap.add_argument("--hidden", type=int, default=16, help="tower: hidden width of the state tower")
     args = ap.parse_args()
@@ -186,7 +187,7 @@ def main():
         note = ("%s, trained %s on %d rows (%d epochs, beta %.2f); held-out top-1 %.1f%% vs nearest-candidate %.1f%%"
                 % (args.arch, time.strftime("%Y-%m-%d %H:%M"), int((~test).sum()), args.epochs, args.beta,
                    100 * (int_pred == yv).mean(), 100 * (yv == 0).mean()))
-        weights_io.write_head(args.out, "CAMP_SCORER", spec, margin,
+        weights_io.write_head(args.out, args.head, spec, margin,
                               "integer score gap equal to %s logits; below it the script's camp choice stands" % args.margin,
                               note, extra={"n_state": N_STATE, "kind": "bilinear"})
         print("wrote", args.out)

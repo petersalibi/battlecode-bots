@@ -644,6 +644,35 @@ class World:
     def enemy_within(self, distance):
         return self.nearest_enemy is not None and self.nearest_enemy.dist <= distance
 
+    def spawn_power_balance(self):
+        """Power of the bodies on our spawn (ours included) over every visible enemy's."""
+        if self.enemy_power <= 0:
+            return 99.0
+        power = self.hp * self.strength
+        for pos, hp, strength, d in self.allies:
+            if self.spawn_ally.is_set(pos):
+                power += hp * strength
+        return power / self.enemy_power
+
+    def spawn_tile_away(self, threats):
+        """The spawn tile next to us furthest from the nearest threat, when it beats where we
+        stand (ranged campers reach three tiles into the spawn; the far edge is out of reach)."""
+        here = min(self.pos.chebyshev_distance(t) for t in threats)
+        best, best_d = None, here
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                if dx or dy:
+                    tile = cambc.Vec2(self.pos.x + dx, self.pos.y + dy)
+                    try:
+                        if not self.spawn_ally.is_set(tile):
+                            continue
+                    except Exception:
+                        continue
+                    d = min(tile.chebyshev_distance(t) for t in threats)
+                    if d > best_d:
+                        best, best_d = tile, d
+        return best
+
     def rounds_left(self):
         return self.max_rounds - self.round
 

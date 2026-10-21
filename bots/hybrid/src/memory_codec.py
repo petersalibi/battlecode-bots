@@ -4,7 +4,8 @@ Shared memory (8 bytes, read/write all match):
     bytes 0-5   one claim byte per ally body, indexed by the body's position in cambc.champions(ALLY)
                 bits 7-6: status (STATUS_*), bits 5-0: claimed camp group index + 1 (0 = none)
     byte 6      low byte of the round an enemy was last seen by anyone (0 = never)
-    byte 7      reserved (the fuelbench bot uses it)
+    byte 7      break-out signal: bit 7 set, bits 6-0 the round (mod 128) a gated body decided the
+                team leaves spawn together (0 = none)
 
 Draft memory (1,024 bytes, written in the draft, read-only afterwards):
     b"HY1" magic, team size, aggression 0-255, map-size class, then per-body shard stat.
@@ -48,6 +49,18 @@ def read_enemy_seen():
     return cambc.shared_memory[6]
 
 
+def write_breakout(round_number):
+    cambc.shared_memory[7] = 0x80 | (round_number & 0x7F)
+
+
+def breakout_age(round_number):
+    """Rounds since the last break-out signal, or None when there is none."""
+    value = cambc.shared_memory[7]
+    if not value & 0x80:
+        return None
+    return (round_number - (value & 0x7F)) & 0x7F
+
+
 # ---- Draft memory -------------------------------------------------------------
 
 def encode_plan(team_size, aggression, small_map, stats, dash_map=False):
@@ -77,4 +90,5 @@ def default_plan():
 
 
 __all__ = ["STATUS_IDLE", "STATUS_FARM", "STATUS_CAPTURE", "STATUS_BUSY", "read_claims", "write_claim",
-           "write_enemy_seen", "read_enemy_seen", "encode_plan", "decode_plan", "default_plan", "config"]
+           "write_enemy_seen", "read_enemy_seen", "write_breakout", "breakout_age", "encode_plan", "decode_plan",
+           "default_plan", "config"]

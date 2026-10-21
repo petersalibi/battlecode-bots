@@ -44,6 +44,8 @@ class Decider:
         self.net_target = None        # group index the scorer chose; the script keeps it while it is a candidate
         self.was_alive = True
         self.camp_source = "script"   # who ranked the camps at the last retarget
+        self.gated_since = -1         # round the spawn gate started holding this body, or -1
+        self.breakout_round = -1      # round this body joined a break-out
 
     def record_death(self, round_number):
         """Called on the first dead turn: remember where we were going (camp_features reads it)."""
@@ -209,8 +211,12 @@ class Decider:
         # Spawn camping (elk arena on the ladder: 79 deaths, most within 8 turns of our spawn at
         # full health, three enemies in sight): the spawn heals and enemies cannot enter it, so a
         # body that would walk out into a stronger group stays until it has left or allies are up.
-        if config.SPAWN_GATE and w.at_spawn and w.enemies and w.enemy_within(config.SPAWN_GATE_RANGE)                 and w.power_balance() < config.SPAWN_GATE_BALANCE:
-            return self._set_mode(RECALL, "rule")
+        if config.SPAWN_GATE and w.at_spawn and w.enemies and w.enemy_within(config.SPAWN_GATE_RANGE):
+            mode = self._spawn_gate(w)
+            if mode is not None:
+                return self._set_mode(mode, "rule")
+        else:
+            self.gated_since = -1
 
         # The script always runs: it builds and scores the candidates the features summarise, and
         # it is the fallback. The network then costs only the feature pass and one forward.
@@ -231,6 +237,33 @@ class Decider:
             except Exception:
                 pass
         return self._set_mode(chosen, source)
+
+    def _spawn_gate(self, w):
+        """On spawn with enemies in sight. Hold (RECALL: heal, shop, stand off the near edge) until
+        the bodies on spawn outweigh the campers by SPAWN_BREAK_RATIO, an ally has already called
+        the break-out this round or last, or the hold has lasted SPAWN_GATE_MAX_TURNS; then post
+        the break-out and leave fighting, so the team walks out together instead of one at a time.
+        None means the gate does not apply (we clearly outweigh them: act normally)."""
+        if self.gated_since < 0:
+            self.gated_since = w.round
+        try:
+            age = memory_codec.breakout_age(w.round)
+        except Exception:
+            age = None
+        if age is not None and age <= 1 and self.breakout_round != w.round:
+            self.breakout_round = w.round
+            self.gated_since = -1
+            return FIGHT if w.enemy_within(config.FIGHT_RANGE) else FARM
+        balance = w.spawn_power_balance()
+        if balance >= config.SPAWN_BREAK_RATIO or w.round - self.gated_since >= config.SPAWN_GATE_MAX_TURNS:
+            try:
+                memory_codec.write_breakout(w.round)
+            except Exception:
+                pass
+            self.breakout_round = w.round
+            self.gated_since = -1
+            return FIGHT if w.enemy_within(config.FIGHT_RANGE) else None
+        return RECALL
 
     def _set_mode(self, mode, source):
         if mode == self.mode:
