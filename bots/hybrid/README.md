@@ -268,6 +268,7 @@ rating 1830), in `data/replays/1.0.1/`. None of the models trained on it beat v5
 | all 658 games available at the time, winners only | 32-38 (-40) | 42-28 (+54) |
 | those games, sides rated 1800+ (191 games) | 36-34 (+19) | 43-27 (+72) |
 | all 948 games, sides rated 1800+ (479 games) | 28-42 (-14) | 37-33 (+24) |
+| top 25 teams' wins over seven hours of 1.0.1 (180 games, mean rating 2117, 2026-10-21) | 36-34 (+19) vs v9, 36-34 (+8) vs v10 | |
 
 So v5's recipe (62 games of the top 15 teams, both sides, winners weighted up) still stands, and
 the spread between runs on similar data says a 70-game harness result is only good to about
