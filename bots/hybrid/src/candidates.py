@@ -116,13 +116,22 @@ class Turn:
                 being_captured = {group_index for slot, (status, group_index) in enumerate(w.claims)
                                   if slot != w.slot and status == memory_codec.STATUS_CAPTURE}
                 field = self.nav.from_me(config.MAX_CAMP_TURNS)
+                # A capture an ally is holding against an enemy on the region (byte 6, fresh):
+                # joining it is the only way the timer ever runs out (corridors: won fights, no gems).
+                party = None
+                if config.CAPTURE_PARTY and w.contested is not None and w.contested[1] <= config.CAPTURE_PARTY_FRESH:
+                    party = w.contested[0]
                 for g in fresh:
                     if g.anchor is None or g.avoid_until > w.round:
                         continue
                     travel = 0 if g.tiles.is_set(w.pos) else field.get(g.anchor) + 1
                     # An ally already on it will finish before we arrive; more bodies do not speed it
-                    # up, and a one-tile region has no room for a second body anyway.
-                    if travel <= 8 and (travel == 0 or g.index not in being_captured):
+                    # up, and a one-tile region has no room for a second body anyway, unless the
+                    # ally is held up by an enemy on the region.
+                    if g.index == party and g.index in being_captured:
+                        if travel <= config.CAPTURE_SUPPORT_TRAVEL:
+                            out.append((g, travel))
+                    elif travel <= 8 and (travel == 0 or g.index not in being_captured):
                         out.append((g, travel))
                 out.sort(key=lambda item: item[1])
             self._captures = out

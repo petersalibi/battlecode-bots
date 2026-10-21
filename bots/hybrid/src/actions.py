@@ -299,13 +299,17 @@ class Actions:
             self.waiting = True
             enemy = self.d.choose_fight_target(turn, w)
             contested = any(g.tiles.is_set(e.pos) for e in w.enemies)
+            if contested and config.CAPTURE_PARTY:
+                memory_codec.write_contested(g.index, w.round)       # the call for a party capture
             if enemy is not None and enemy.dist <= w.attack_range:
                 self._cast_offensive(enemy.champion, enemy.pos, against_camp=False)
                 self._attack_with_reset(enemy.champion, enemy.pos)
             elif contested and enemy is not None and enemy.dist <= config.FIGHT_RANGE                     and w.power_balance() >= config.CAPTURE_FIGHT_BALANCE and w.hp_ratio >= config.FIGHT_MIN_HEALTH:
                 self.waiting = False
                 return self.fight(turn)
-            if contested and w.round - d.capture_since > config.CAPTURE_STANDOFF_TURNS:
+            backed = config.CAPTURE_PARTY and w.allies_near(g.anchor, config.HELP_WAIT_RANGE) > 0
+            standoff = config.CAPTURE_STANDOFF_TURNS * (2 if backed else 1)
+            if contested and w.round - d.capture_since > standoff:
                 g.avoid_until = w.round + config.CAPTURE_STANDOFF_AVOID
                 d.capture_group = None
                 d.camp_cache = None
@@ -313,6 +317,14 @@ class Actions:
                 return self.farm(turn)
             self.ward_here()
             return
+        # Joining a party capture: hit an enemy standing on the region on the way in (a one-tile
+        # region has room for one body, and the enemy on it is what keeps the timer at zero).
+        if config.CAPTURE_PARTY and w.enemies:
+            for e in w.enemies:
+                if e.dist <= w.attack_range and g.tiles.is_set(e.pos):
+                    self._cast_offensive(e.champion, e.pos, against_camp=False)
+                    self._attack_with_reset(e.champion, e.pos)
+                    break
         # Prefer a free tile of the region. Camps are dead, so only units can block.
         field = self.nav.field_to(("camp", g.index), g.tiles)
         self.nav.step_along(field)
