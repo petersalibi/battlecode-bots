@@ -93,6 +93,8 @@ class Bot:
         self.act.run(mode, turn)
         memory_codec.write_claim(w.slot, self.act.status, self.act.claim_group)
         self._stall_guard(mode)
+        if config.WARD_OFTEN and not w.channeling:
+            self.act.ward_often()
         if config.TURN_PRIORITY:
             self._set_priority(w, mode)
 

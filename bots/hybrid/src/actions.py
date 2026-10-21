@@ -616,6 +616,27 @@ class Actions:
             return ("STRENGTH", "FOCUS", "HEALTH")[code]
         return config.BUILD_STAT.get(self.w.kind_name, "STRENGTH")
 
+    def ward_often(self):
+        """Vision: every other team places about 42 wards in the first 300 rounds, we placed 6.5
+        (only while capturing). Drop one wherever we are once the charge is back and we have
+        moved WARD_OFTEN_SPACING tiles from the last one, outside our spawn."""
+        w = self.w
+        if w.at_spawn or w.round - w.ward_round < config.WARD_OFTEN_EVERY:
+            return False
+        try:
+            pos = w.me.position()
+            if w.ward_pos is not None and pos.chebyshev_distance(w.ward_pos) < config.WARD_OFTEN_SPACING:
+                return False
+            if w.me.ward_cooldown() > 0:
+                return False
+            if w.me.place_ward(pos):
+                w.ward_round = w.round
+                w.ward_pos = pos
+                return True
+        except Exception:
+            pass
+        return False
+
     def ward_here(self):
         """Drop our ward where we stand, at most every WARD_REPLACE_EVERY rounds."""
         w = self.w
@@ -626,6 +647,7 @@ class Actions:
                 return False
             if w.me.place_ward(w.pos):
                 w.ward_round = w.round
+                w.ward_pos = w.pos
                 return True
         except Exception:
             pass

@@ -155,6 +155,7 @@ class World:
         self.events = set()
         self.prev_gems = 0
         self.ward_round = -10_000
+        self.ward_pos = None           # where our last ward went (actions.ward_often spaces them)
         self.moved = False
         self.cast_exclusive = False
         self._banked = (0, 0)

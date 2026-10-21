@@ -450,7 +450,16 @@ class Decider:
             if contested is not None and contested[0] == g.index and contested[1] <= config.CONTEST_MEMORY:
                 # An enemy was seen at this group lately: not a solo trip; a pair is fine.
                 score *= config.CONTEST_PAIR_BONUS if cand.claimed else config.CONTEST_SOLO_FACTOR
-        if cand.claimed and not needs_help and not (config.COOP and w.help_called(g.index)):
+        # The first 300 rounds: two thirds of the top teams' camp hits had an ally within 3 tiles,
+        # ours a third, and they gathered twice our gems. One ally on a camp is the pair we want
+        # (it clears twice as fast and splits the monsters' attention); a third body still stacks.
+        paired = False
+        if config.EARLY_PAIRS and w.round <= config.EARLY_PAIR_ROUNDS and not needs_help and cand.claimed == 1:
+            paired = True
+            score *= config.EARLY_PAIR_BONUS
+            if config.ELK_BONUS != 1.0 and 1 in g.kinds:
+                score *= config.ELK_BONUS
+        if cand.claimed and not needs_help and not paired and not (config.COOP and w.help_called(g.index)):
             score *= config.CLAIMED_PENALTY                           # do not stack on an easy camp
         if self.target_group is not None and g.index == self.target_group.index:
             score *= 1.15                                             # finish what we started
