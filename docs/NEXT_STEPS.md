@@ -143,6 +143,16 @@ suppressed there. Cache camp candidate scores across the RETARGET_EVERY window a
 Top 15 to 25 teams over a longer post-patch window; weight by rating more sharply; hold out by
 map and report accuracy per map.
 
+### Scoreless maps are gold games (tried 2026-10-21, dropped)
+
+At the 2,000-round limit a 0-0 game goes to lifetime gold earned, then kills, and each kill
+pays 100 gold: on contest, stampede and boss battle every body fed is the tiebreak. A rule that
+fled at anything under a 1.5 power edge, fought only at 2x or for a kill in reach, and valued gold
+camps at half a gem per gold made it worse: 49 deaths on contest against 12 (v10) and 0-400, 4-6
+on those maps, 34-36 and 32-38 overall with far more deaths. Fleeing bodies get chased down
+and the gold camps on those maps sit in the contested middle. What those maps need is the
+cooperative plan, not a timidity switch.
+
 ### Last: cooperation
 
 Rotation plans for contest, boss_battle, gold_rush, elk_arena, stampede and rushbait, escorts
