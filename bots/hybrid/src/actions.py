@@ -260,6 +260,16 @@ class Actions:
                 camp, gi, pos, hp = targets[0]
                 self._attack_with_reset(camp, pos)
                 self._cast_offensive(camp, pos, against_camp=True)
+        if not w.moved and not self.acted:
+            # Could not step towards the group: on the camp clusters (concentrated wealth,
+            # islands) another group's camps wall the target off, and bodies queued there idle
+            # for ten turns at a time. Hit whatever camp is in range: it pays, and it opens the way.
+            blockers = self._camps_in_range()
+            if blockers:
+                camp, gi, pos, hp = blockers[0]
+                self.trace += " clearing g%d" % gi
+                self._attack_with_reset(camp, pos)
+                self._cast_offensive(camp, pos, against_camp=True)
 
     # ---- capture -------------------------------------------------------------------
     def capture(self, turn):
