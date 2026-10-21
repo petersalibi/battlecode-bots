@@ -98,7 +98,9 @@ def download(mid, path):
         if not proc.returncode and os.path.exists(path):
             return None
         err = (proc.stderr or "").strip()
-        if "429" not in err and "Rate limit" not in err:
+        # 429: a few calls a second. 409 "Wait for your current download to finish": one download
+        # at a time per account, so a parallel worker simply waits its turn.
+        if "429" not in err and "Rate limit" not in err and "409" not in err:
             break
         m = re.search(r"retry after (\d+)", err)
         time.sleep(max(int(m.group(1)) if m else 1, 1) + attempt)
