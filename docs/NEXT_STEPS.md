@@ -54,6 +54,11 @@ the script). Expected: fixes loss shape 1 outright. Mirror check: must not cost 
 (a camp-near-visible-enemy penalty did, because clones contest every camp; a memory of actual
 deaths should fire far less in the mirror).
 
+Tried and dropped the same day: a team death memory through the claims board (a dead body posts
+BUSY with its target group; allies count it at half weight) lost 31-39 (-83 gems) and 29-41 with
+more deaths. In the mirror both sides die symmetrically, so shunning every group an ally died at
+mostly costs camps; a ladder-only test would need a switch.
+
 ### 2. Spawn camp exit (first pass shipped in v8, 2026-10-21: far-edge stance, group break-out; the dash exit is still open)
 
 The gate is right to hold bodies, wrong to hold them on the near spawn tiles and wrong to release

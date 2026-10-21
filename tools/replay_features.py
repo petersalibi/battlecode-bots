@@ -210,6 +210,7 @@ class OfflineWorld:
     """The attributes features.build() and decide.score_camp() read, from a dumped turn."""
     recall_time = 5
     max_rounds = 2000
+    team_deaths = {}          # the bot's claims-board death memory; not reconstructed offline
 
     def __init__(self, st, turn, tracker, team_sizes, prev_mode):
         s = turn["state"]
