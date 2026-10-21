@@ -387,6 +387,21 @@ level or worse in the mirror, so both stay behind their switches (`USE_NN_ESCAPE
   champions worse than Varg and Vendetta. Off (`USE_NN_DRAFT`). The next version should learn
   from our own games with randomised drafts, where the label is our margin, not theirs.
 
+- **Self-play draft** (`tools/selfplay_drafts.py`, `tools/train_draft_value.py`, same day):
+  the bot's draft gets an exploration switch (`DRAFT_RANDOM`: each pick is a random allowed
+  champion with that probability, seeded from a per-sweep salt and the map, data runs only). The
+  driver plays sweeps against a fixed tag, reads each game's roster and gem margin from the
+  harness, and a value head (36 inputs, the draft layout with the full composition set, -> 16 -> 1)
+  learns our expected margin for a composition on a map. The draft is then planned greedily on
+  the first draft turn (the later turns have a tenth of the fuel) and carried in the plan.
+  5,250 games: 3,150 fully random (we win 16%) and 2,100 exploring 25% around the list and then
+  around the head's own drafts. Held-out correlation with the margin 0.54; the quarter of
+  compositions it rates best average +27 against -217 overall. In play it is level with the hand
+  list after two iterations: 35-35 (+33) and 36-34 (+35) against v11, 32-38 (+9) and 31-39 (+18)
+  against v10 with fewer deaths, but about 35 exhaustions a sweep against v11's 10, in the
+  first hundred rounds of bodies on compositions with two ranged dash champions. Off
+  (`USE_NN_DRAFT_VALUE`); the loop is the first working self-play path and is cheap to continue.
+
 **Draft for patch 1.0.2** (same day): Vesper Vale moved up and Heart of Ruin and Ren down in both
 priority lists, after the patch cut Heart of Ruin's strength to 30 and Ren's stun damage and gave
 Vesper Vale and Vendetta more health. 41-29 (+48 gems, deaths 1130 vs 1216) against v8 and 38-32

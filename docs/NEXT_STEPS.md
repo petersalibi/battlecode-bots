@@ -131,6 +131,12 @@ compositions per map and is the cheapest real self-play target we have (a game's
 decision, the harness plays 1,400 games an hour, and the pipeline is built). `tools/retrain_draft.py`
 refreshes the imitation version after a patch.
 
+Self-play version (same day): random and near-list exploration against v11, a value head over
+compositions, greedy planning on the first draft turn. Level with the list after two iterations
+(36-34 +35 vs v11, 31-39 +18 vs v10) with more early exhaustions; off. The loop works and is the
+template for the selector trunk: exploration switch, fixed opponent pool, margin labels, retrain,
+harness gate.
+
 ### 5. Camp scorer network (built 2026-10-21, off: level in the mirror)
 
 Shipped in the code behind `USE_NN_CAMP` (bilinear, see the README). Level against v6 and v7

@@ -142,7 +142,7 @@ DRAFT_PRIORITY = ("VENDETTA", "MARCELLA", "RYTH", "VARG", "VESPER_VALE", "HEART_
                   "WILLOW", "STELLAR", "TAVI", "PRISM", "CASSI_AND_ISSAC")
 N_DRAFT_PICKS = 12          # ChampionDraft values 0..11 (Cassi & Issac are one pick)
 USE_NN_DRAFT = False        # the draft head in weights.DRAFT_HEAD picks from the map (draft._net_pick)
-USE_NN_DRAFT_VALUE = True   # the draft value head in weights.DRAFT_VALUE drafts greedily by predicted margin (draft._value_pick)
+USE_NN_DRAFT_VALUE = False  # the draft value head in weights.DRAFT_VALUE drafts greedily by predicted margin (draft._value_pick)
 DRAFT_RANDOM = 0.0          # self-play exploration: probability each pick is a random allowed champion (data runs only, never submitted)
 DRAFT_RANDOM_SALT = 0       # varies per exploration sweep so the same map draws different drafts
 DRAFT_HEAD_FUEL = 8_000_000 # the map features need this much in hand (measured 3.2M on corners, 5.1M on big-world and islands): first draft turn only
