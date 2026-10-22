@@ -442,6 +442,34 @@ int8 quantiser, writes CONTACT_HEAD into weights.py), parity_test covers it. `US
   which the head cannot tell from waiting); the head is one-sided towards attack, which is the
   measured gap (30% vs 43% attack rate) so that is the intended bias; fuel on 100x100 maps.
 
+### Three studies to find the next target (2026-10-22 night, v36-v39 band runs, 280 games)
+
+1. Farming is level: gems per 100 living turns 16.0 (us) vs 16.6 (them), gems per camp hit
+   1.06 both, captures 10.8 vs 10.9 a body-game. Gathered a body-game 178 vs 194 because we
+   are dead 20% of turns to their 16% (farmeff.py). Clears are slower (17 vs 14 turns in the
+   opening, 76% vs 78% captured; elk groups captured 72% vs 76%, 519 stolen after we cleared
+   them). Draft note: their Varg/Vendetta/Heart of Ruin gather 20+ per 100 living turns, our
+   Varg 15, our Vesper Vale 9 (theirs 13).
+2. The opening is level: dead 14% of the first 150 rounds both sides, 14.6 vs 16.5 clears,
+   first clear r128 vs r142.
+3. Map-shaped, strongly: eight 2/28 (306 vs 945 gems, all seven v39 games lost, 32 deaths a
+   game vs 8), expanse 7/28, corners 8/28, starfish 9/28; packs 17/28 and fragment 15/28 at the
+   other end. By opponent: Serious-Wyso 7/40, Live Love Larp 9/40. All 280 games are side a.
+   Deaths are the map signal: hooks 34 a game, eight 32, swirl 28, starfish 27 (theirs 23, 8,
+   24, 27); expanse and corners are gem races with few deaths.
+
+**The gap underneath is cohesion.** Our deaths come with 2.6 enemies and 1.0 allies within
+4 tiles, theirs with 2.0 enemies and 1.4 allies; 70% of ours are in flee mode. On every band
+map the band keeps an ally within 4 tiles on 10 to 28 points more of its living turns (eight
+63% vs 47%, swirl 71% vs 49%, fragment 59% vs 31%, corners 50% vs 35%). On eight (one altar
+at the centre, spawns on the far edges) they hold the middle as a group (30% of their turns
+within 6 of the altar, tribute 32 times a game with 31-gem bags, 0.98 allies beside them at
+the altar) and we walk in alone (15 tributes, 20-gem bags, 0.70 allies) and die there (42% of
+our deaths within 6 of the altar). The squads layer never engages on these maps: its middle
+share reads 0% on all ten. The mirror cannot judge cohesion (both sides play the same), so the
+band is the only test; two mirror-based lessons may be wrong for it ("fleeing towards allies
+tested worse", squads lost on gathering).
+
 ### Where we are (v39, aad47e3, live 2026-10-22 18:44 UTC)
 
 - Band wins on the same 70 games: v14 6, v26 12, v28 15, v31 16, v33 14, v34 11 (engine 1.0.3
