@@ -470,6 +470,27 @@ share reads 0% on all ten. The mirror cannot judge cohesion (both sides play the
 band is the only test; two mirror-based lessons may be wrong for it ("fleeing towards allies
 tested worse", squads lost on gathering).
 
+### 4g. Cohesion (built 2026-10-22 night, after the three studies; v40)
+
+Three pieces, every constant with its range, all `COHESION` / `FLEE_TO_ALLY` / `CONVOY` / `ESCORT`:
+- Camp choice: a group within `COHESION_RANGE` (8) of a group an ally claims scores
+  `COHESION_BONUS` (1.15) more; the same-group `CLAIMED_PENALTY` still spreads a pair over two
+  camps. One bitboard a round (the per-candidate loop exhausted lanes and islands); 1.4 clustered
+  the whole team into brawls (hooks 0 gems, collision 65, contest 200 in the mirror).
+- Retreat: `navigation.step_away` leans towards a healthy ally in sight that is not deeper in,
+  for at most `FLEE_ALLY_SLACK` (1) tile of distance from the threats.
+- Central-altar maps (`w.central_altar`: one altar within `CENTRAL_ALTAR_RADIUS` of the centre:
+  eight, hooks): a lone carrier needs `TRIBUTE_BAG * CONVOY_BAG_FACTOR` before the trip, company
+  in sight makes it at the usual bag, an ally banking in sight pulls a carrier with
+  `TRIBUTE_BAG_NEAR` along (`CONVOY_JOIN_BONUS`), a body with nothing to bank escorts a banking
+  ally for `ESCORT_TURNS` (the farm action's regroup step; "banking" = BUSY claim with no group
+  and gems in the bag, since a recall reads the same on the board).
+- Mirror vs v39: 47-33 (+44 / +67 on two runs), deaths 1314 vs 1369. The on/off sweep of the
+  two switches is dominated by per-map chaos (swings of 1,700 gems on fight maps between
+  points), so the mirror cannot rank them; both on is the best point and the band judges.
+  Exhaustions 100-113 (v39 ~70): the extra per-turn work tips the big maps; the ally bag read is
+  now central-map only.
+
 ### Where we are (v39, aad47e3, live 2026-10-22 18:44 UTC)
 
 - Band wins on the same 70 games: v14 6, v26 12, v28 15, v31 16, v33 14, v34 11 (engine 1.0.3

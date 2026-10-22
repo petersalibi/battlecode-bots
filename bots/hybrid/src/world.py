@@ -771,10 +771,12 @@ class World:
             self.allies.append((pos, hp, strength, pos.chebyshev_distance(self.pos)))
             slot = self.slot_of_handle.get(int(champion))
             if slot is not None:
-                try:
-                    bag = champion.gem_count()
-                except Exception:
-                    bag = 0
+                bag = 0
+                if self.central_altar:                 # only the convoy/escort rules read the bag (an engine call each)
+                    try:
+                        bag = champion.gem_count()
+                    except Exception:
+                        bag = 0
                 self.visible_ally_slots[slot] = (pos, hp, pos.chebyshev_distance(self.pos), bag)
             if pos.chebyshev_distance(self.pos) <= config.FIGHT_RANGE:
                 self.ally_power += hp * strength
