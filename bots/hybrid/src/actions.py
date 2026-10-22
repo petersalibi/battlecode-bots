@@ -223,7 +223,7 @@ class Actions:
     def farm(self, turn):
         w, d = self.w, self.d
         self.status = memory_codec.STATUS_FARM
-        if d.last_source == "regroup" and d.regroup_pos is not None:
+        if d.last_source in ("regroup", "escort") and d.regroup_pos is not None:
             # Opening: an enemy just came into sight and our nearest ally is a few tiles off. Step
             # to it (a local field, 12 tiles out); hit back if something is in reach.
             goals = Bitboard()

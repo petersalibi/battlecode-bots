@@ -11,6 +11,7 @@ import fight_features
 import datalog
 import features
 import fuel
+import cambc
 import memory_codec
 import contact_features
 import nn
@@ -59,6 +60,10 @@ class Decider:
         self.chase_until = -1
         self.regroup_pos = None       # opening: the ally tile this body is stepping towards, and until when
         self.regroup_until = -1
+        self.escort_slot = None       # central-altar maps: the banking ally this body walks beside, and until when
+        self.escort_until = -1
+        self._cohesion_round = -1     # the round the cohesion bitboard was built for (camp scoring)
+        self._cohesion_board = None
         self.enemy_seen_round = -100  # last round an enemy was in sight (the first sighting starts a regroup)
         self.explore_mode = FARM      # self-play exploration: the mode being held and until when
         self.explore_until = -1
@@ -193,6 +198,19 @@ class Decider:
                 score += 0.5
             if w.gems + w.team_gems_banked() >= w.winning_gems:
                 score += 3.0                                          # this bag wins the game
+            if config.CONVOY and w.central_altar and not endgame and turns > config.TRIBUTE_NEAR_TURNS \
+                    and w.hp_ratio >= config.RECALL_HEALTH:
+                # One altar in the middle of the map (eight: 42% of our deaths within 6 tiles of
+                # it, 15 solo trips a game with 20-gem bags against the band's 32 trips with
+                # 31-gem bags and an ally beside them). Alone, a bag has to be big; with company
+                # in sight the trip is on, and an ally already banking is company to join.
+                company = any(d <= config.CONVOY_RANGE and hp > 0 for pos, hp, strength, d in w.allies)
+                banking = any(seen[2] <= config.CONVOY_RANGE and self._banking(w, slot)
+                              for slot, seen in w.visible_ally_slots.items())
+                if banking and w.gems >= config.TRIBUTE_BAG_NEAR:
+                    score += config.CONVOY_JOIN_BONUS
+                elif not company and w.gems < config.TRIBUTE_BAG * config.CONVOY_BAG_FACTOR:
+                    score *= config.CONVOY_SOLO_FACTOR
             scores[TRIBUTE] = score
 
         # Recall: heal, or go home to spend a pile of gold.
@@ -301,6 +319,9 @@ class Decider:
         pair = self._pair_rules(w)
         if pair is not None:
             return pair
+        escort = self._escort_rule(w)
+        if escort is not None:
+            return escort
         chase = self._chase_rule(w)
         if chase is not None:
             return chase
@@ -536,6 +557,44 @@ class Decider:
             self.chase_until = w.round + config.CHASE_TURNS
         return self._set_mode(FIGHT, "chase")
 
+    @staticmethod
+    def _banking(w, slot):
+        """An ally's claim reads BUSY with no group: banking or recalling (dead allies are not in
+        sight, so a visible one is one of those two)."""
+        if slot < 0 or slot >= len(w.claims):
+            return False
+        status, group = w.claims[slot]
+        if status != memory_codec.STATUS_BUSY or group >= 0:
+            return False
+        seen = w.visible_ally_slots.get(slot)
+        return seen is not None and seen[3] > 0                      # carrying gems: banking, not recalling
+
+    def _escort_rule(self, w):
+        """Central-altar maps: a body with nothing to bank and no enemy in sight walks beside an
+        ally that is banking, for up to ESCORT_TURNS turns (the farm action's regroup step)."""
+        if not (config.CONVOY and config.ESCORT and w.central_altar) or w.enemies or w.at_spawn \
+                or w.gems >= config.TRIBUTE_BAG_NEAR or w.hp_ratio < config.FIGHT_MIN_HEALTH:
+            self.escort_slot = None
+            return None
+        if self.escort_slot is not None and (w.round > self.escort_until
+                                             or self.escort_slot not in w.visible_ally_slots
+                                             or not self._banking(w, self.escort_slot)):
+            self.escort_slot = None
+        if self.escort_slot is None:
+            for slot, (pos, hp, d, bag) in w.visible_ally_slots.items():
+                if d <= config.CONVOY_RANGE and self._banking(w, slot) and hp > 0:
+                    self.escort_slot = slot
+                    self.escort_until = w.round + config.ESCORT_TURNS
+                    break
+        if self.escort_slot is None:
+            return None
+        pos, hp, d, bag = w.visible_ally_slots[self.escort_slot]
+        if d <= 1:
+            self.regroup_pos = None
+            return None                                   # beside it already: farm as usual
+        self.regroup_pos = pos
+        return self._set_mode(FARM, "escort")
+
     def _pair_rules(self, w):
         """Opening (band games: after an enemy first came into sight, our bodies died 11% of the time
         whether or not an ally was within 4 tiles; the band's 5-6% with an ally, 8-9% alone; five
@@ -758,6 +817,30 @@ class Decider:
             score *= config.EARLY_PAIR_BONUS
             if config.ELK_BONUS != 1.0 and 1 in g.kinds:
                 score *= config.ELK_BONUS
+        if config.COHESION and g.anchor is not None and not cand.claimed:
+            # A camp next to the one an ally is working: the pair stays within reach without
+            # stacking on one camp (band study: an ally within 4 tiles on 10-28 points more of
+            # their turns than ours, on every map). One bitboard a round (<= 5 draws) and one
+            # test per candidate: the per-candidate claim loop exhausted lanes and islands.
+            if self._cohesion_round != w.round:
+                self._cohesion_round = w.round
+                board = None
+                tmp = None
+                for slot, (status, claimed) in enumerate(w.claims):
+                    if slot == w.slot or claimed < 0 or claimed >= len(w.groups) or status == memory_codec.STATUS_BUSY:
+                        continue
+                    other = w.groups[claimed].anchor
+                    if other is None:
+                        continue
+                    if board is None:
+                        board = cambc.Bitboard()
+                        tmp = cambc.Bitboard()
+                    tmp.clear()
+                    tmp.draw_chebyshev(other, config.COHESION_RANGE)
+                    board |= tmp
+                self._cohesion_board = board
+            if self._cohesion_board is not None and self._cohesion_board.is_set(g.anchor):
+                score *= config.COHESION_BONUS
         if config.SQUADS and cand.claimed and w.squad_claims(g.index):
             score *= config.SQUAD_JOIN_BONUS                          # a squad mate is there: the squad stays together
         elif cand.claimed and not needs_help and not paired and not (config.COOP and w.help_called(g.index)):

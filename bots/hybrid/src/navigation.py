@@ -212,11 +212,34 @@ class Navigator:
         if not w.can_move or w.cast_exclusive or not threats:
             return False
         blocked = self.blocked()
-        best, best_key = None, None
-        for tile in [w.pos, *blocked.reachable_tiles(w.pos, 1).positions()]:
+        tiles = [w.pos, *blocked.reachable_tiles(w.pos, 1).positions()]
+        ally = None
+        if config.FLEE_TO_ALLY and w.allies:
+            # Lean towards a healthy ally in sight that is not deeper in than we are: our deaths
+            # come with one ally beside us, the band's with 1.4. The lean costs at most
+            # FLEE_ALLY_SLACK of distance from the threats.
+            my_near = min(w.pos.chebyshev_distance(t) for t in threats)
+            for pos, hp, strength, d in w.allies:
+                if d <= config.FLEE_ALLY_RANGE and hp >= config.FLEE_ALLY_MIN_HEALTH * w.max_hp \
+                        and min(pos.chebyshev_distance(t) for t in threats) >= my_near \
+                        and (ally is None or d < ally[1]):
+                    ally = (pos, d)
+        scored = []
+        for tile in tiles:
             nearest = min(tile.chebyshev_distance(t) for t in threats)
             home = -home_field.get(tile) if home_field is not None else 0
-            key = (nearest, 1 if w.bushes.is_set(tile) else 0, home)
+            scored.append((nearest, tile, 1 if w.bushes.is_set(tile) else 0, home))
+        if not scored:
+            return False
+        safest = max(s[0] for s in scored)
+        best, best_key = None, None
+        for nearest, tile, bush, home in scored:
+            if ally is not None:
+                if nearest < safest - config.FLEE_ALLY_SLACK:
+                    continue
+                key = (bush, -tile.chebyshev_distance(ally[0]), nearest, home)
+            else:
+                key = (nearest, bush, home)
             if best_key is None or key > best_key:
                 best, best_key = tile, key
         return best is not None and best != w.pos and self._move(best)

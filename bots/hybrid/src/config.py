@@ -71,6 +71,25 @@ CAPTURE_SUPPORT_TRAVEL = 12 # allies within this many walking turns join (the st
 MAX_CAMP_CANDIDATES = 12
 MAX_CAMP_TURNS = 60         # ignore camps further than this
 CLAIMED_PENALTY = 0.35      # score multiplier when another ally has claimed the group
+# Cohesion (2026-10-22 night; band study on v36-v39: the band keeps an ally within 4 tiles on 10-28
+# points more of its living turns on every map, our deaths come with 2.6 enemies and 1.0 allies
+# beside us, theirs with 2.0 and 1.4; eight 2/28 with 32 deaths a game). The mirror cannot judge
+# any of this (both sides play the same): the band is the test. Every value carries its range.
+COHESION = True             # a camp whose group lies within COHESION_RANGE of a group an ally claims scores more
+COHESION_RANGE = 8          # [6-12] anchor-to-anchor Chebyshev distance
+COHESION_BONUS = 1.15       # [1.1-1.5] (1.4 clustered the team into brawls: hooks 0 gems, collision 65, contest 200 in the mirror) score multiplier (the same-group CLAIMED_PENALTY still spreads a pair over two camps)
+FLEE_TO_ALLY = True         # a retreat step leans towards a healthy ally in sight (navigation.step_away) ...
+FLEE_ALLY_RANGE = 8         # ... within this distance [6-8] ...
+FLEE_ALLY_MIN_HEALTH = 0.5  # ... with at least this share of our max health [0.4-0.7] ...
+FLEE_ALLY_SLACK = 1         # ... giving up at most this much distance from the threats for it [0-2]
+CONVOY = True               # single-central-altar maps (eight): carriers bank together (decide.script_scores, _escort_rule)
+CENTRAL_ALTAR_RADIUS = 6    # one altar within this of the map centre makes the map "central" [4-10]
+CONVOY_RANGE = 6            # an ally in sight within this is company [4-8]
+CONVOY_BAG_FACTOR = 1.5     # alone, a bag has to reach TRIBUTE_BAG times this before the trip [1.2-2.0] ...
+CONVOY_SOLO_FACTOR = 0.3    # ... below it the tribute score is scaled by this [0.2-0.6]
+CONVOY_JOIN_BONUS = 0.6     # an ally in sight is banking and we carry TRIBUTE_BAG_NEAR: go with it [0.3-1.0]
+ESCORT = True               # with nothing to bank, walk beside a banking ally in sight for up to ESCORT_TURNS turns
+ESCORT_TURNS = 8            # [4-12]
 DANGER_WEIGHT = 0.8         # score multiplier slope per unit of (damage taken / health)
 RESPAWN_WAIT_TURNS = 6      # accept arriving this many turns before a camp respawns
 MAX_HELPERS = 3             # plan on at most this many allies joining a camp we cannot solo
