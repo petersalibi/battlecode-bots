@@ -88,10 +88,18 @@ class Decider:
             True,                                                     # FARM always allowed
             bool(turn.captures()),                                    # CAPTURE
             w.gems > 0 and turn.altar() is not None,                  # TRIBUTE
-            w.at_spawn or w.damage_taken <= 0,                        # RECALL (damage cancels it)
+            (w.at_spawn or w.damage_taken <= 0) and not self.recall_in_contact(w),   # RECALL (damage cancels it)
             has_enemy and bool(turn.fight_targets()),                 # FIGHT
             has_enemy or self.camp_hitting(w),                        # FLEE (from champions or camps)
         ]
+
+    @staticmethod
+    def recall_in_contact(w):
+        """Band games: 14% of our contact turns were a body recalling at 94% health beside an enemy
+        (mostly to shop): no attack, no cast, 55 damage a turn. Not with an enemy close and health
+        to fight with."""
+        return (config.NO_RECALL_IN_CONTACT and not w.at_spawn and w.enemies and w.hp_ratio >= config.RECALL_CONTACT_HEALTH
+                and w.nearest_enemy.dist <= config.RECALL_CONTACT_RANGE)
 
     @staticmethod
     def camp_hitting(w):

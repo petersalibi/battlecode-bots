@@ -59,6 +59,13 @@ class Bot:
                 print("trace r%d dead gold=%d" % (w.round, w.gold), flush=True)
             return
         self.d.was_alive = True
+        if w.channeling and config.NO_RECALL_IN_CONTACT and w.recalling and w.enemies and w.hp_ratio >= config.RECALL_CONTACT_HEALTH                 and w.nearest_enemy.dist <= config.RECALL_CONTACT_RANGE - 1:
+            # An enemy walked up to a healthy body standing in a recall: stop it and play the turn.
+            try:
+                w.me.cancel_recall()
+                w.refresh_action_flags()
+            except Exception:
+                pass
         if w.channeling:
             # Recall, tribute or teleport in progress: leave it running.
             memory_codec.write_claim(w.slot, memory_codec.STATUS_BUSY, -1)

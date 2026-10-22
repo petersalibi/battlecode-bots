@@ -155,6 +155,7 @@ class World:
         self.events = set()
         self.prev_gems = 0
         self.ward_round = -10_000
+        self.recalling = False         # in a recall channel (refresh)
         self.ward_pos = None           # where our last ward went (actions.ward_often spaces them)
         self.moved = False
         self.cast_exclusive = False
@@ -409,6 +410,7 @@ class World:
             self.gems = 0
             self.can_move = self.can_attack = self.can_cast = False
             self.channeling = False
+            self.recalling = False
             self.enemies = []
             self.allies = []
             self.visible_camps = []
@@ -440,6 +442,7 @@ class World:
         self.can_cast = ChampionState.CAN_CAST in state
         self.channeling = bool(state & (ChampionState.RECALLING | ChampionState.SUBMITTING_GEMS
                                         | ChampionState.TELEPORTING))
+        self.recalling = bool(state & ChampionState.RECALLING)
         self.at_spawn = self.spawn_ally.is_set(self.pos)
         self.in_bush = self.bushes.is_set(self.pos)
         self.turns_to_altar = self.altar_field.get(self.pos) if self.altar_field is not None else UNREACHABLE
@@ -671,6 +674,16 @@ class World:
                 self.claim_counts[claimed] = self.claim_counts.get(claimed, 0) + 1
                 if status == memory_codec.STATUS_IDLE and not self.help_calls:
                     self.help_calls.add(claimed)      # one live call per team: the lowest slot's
+
+    def refresh_action_flags(self):
+        """Re-read what we may do this turn (after cancelling a channel)."""
+        state = self.me.state()
+        self.can_move = ChampionState.CAN_MOVE in state
+        self.can_attack = ChampionState.CAN_ATTACK in state
+        self.can_cast = ChampionState.CAN_CAST in state
+        self.channeling = bool(state & (ChampionState.RECALLING | ChampionState.SUBMITTING_GEMS
+                                        | ChampionState.TELEPORTING))
+        self.recalling = bool(state & ChampionState.RECALLING)
 
     def help_called(self, group_index):
         return group_index in self.help_calls
