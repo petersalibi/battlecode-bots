@@ -764,13 +764,13 @@ class World:
             return self.power_balance_raw()
         if self.enemy_power_eff <= 0:
             return 99.0
-        return self.ally_power_eff / self.enemy_power_eff
+        return config.POWER_CALIBRATION * self.ally_power_eff / self.enemy_power_eff
 
     def power_balance_raw(self):
         """Strength-only balance: the selector's feature (it was trained on this)."""
         if self.enemy_power <= 0:
             return 99.0
-        return self.ally_power / self.enemy_power
+        return config.NN_BALANCE_SCALE * self.ally_power / self.enemy_power
 
     def enemy_within(self, distance):
         return self.nearest_enemy is not None and self.nearest_enemy.dist <= distance
