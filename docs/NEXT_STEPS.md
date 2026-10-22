@@ -419,14 +419,20 @@ int8 quantiser, writes CONTACT_HEAD into weights.py), parity_test covers it. `US
   hold 21%. At the 0.5-logit margin it speaks on 77% of rows at 74.7%. Int8 agrees 98.2%.
 - Mirror vs v37, 80 games: **48-32, +54, gems/100 55.7 vs 51.8, deaths 1302 vs 1367**
   (both up: more fights), exhaustions 58 (v37 runs 39-50), stalls 250.
+- **Submitted as v38 (a88b3f9, 2026-10-22 18:25 UTC).** Band, same 70 games: 27 wins (v37 24,
+  v36 26), gathered 772 and banked by r1000 335 (both the best so far), deaths 19.7 (19.3-18.9).
+  The measured gap closed: our contact attack rate 30% (v35) -> 36% (v37, parting shot) -> 42%
+  (v38, the head) against the band's 43%; damage traded 0.61 -> 0.75 -> 0.81; flee is 28% of
+  contact turns (36%) and those turns now attack 20% (1.7%). Deaths are flat, so the extra
+  fighting is paid for.
 - Open: the hold/retreat classes are weak (the band's "hold" is mostly farming beside an enemy,
   which the head cannot tell from waiting); the head is one-sided towards attack, which is the
   measured gap (30% vs 43% attack rate) so that is the intended bias; fuel on 100x100 maps.
 
-### Where we are (v37, d96bd94, live 2026-10-22 17:57 UTC)
+### Where we are (v38, a88b3f9, live 2026-10-22 18:25 UTC)
 
 - Band wins on the same 70 games: v14 6, v26 12, v28 15, v31 16, v33 14, v34 11 (engine 1.0.3
-  from here), v35 17, v36 26, v37 24. Deaths per game 19 to 20 throughout; gathering is the lever that
+  from here), v35 17, v36 26, v37 24, v38 27. Deaths per game 19 to 20 throughout; gathering is the lever that
   moved (485 -> 577 -> 757 a game).
 - Ladder: v34 64% over 50 games, rank 179 / 1,663. 1,750 still needs about 60% against the
   opponents that come with it.
