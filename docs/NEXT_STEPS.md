@@ -434,14 +434,18 @@ int8 quantiser, writes CONTACT_HEAD into weights.py), parity_test covers it. `US
   75.6%. Mirror vs v38: **49-31, +123, gems/100 58.3 vs 49.4, deaths 1308 vs 1405**; exhaustions
   70 (big world 21, lanes 10, lost world 8: contact turns on big maps; CONTACT_FUEL raised to
   250K). Band policy (Tyler): the v14 band stays the reference until a version wins 36+ of 70.
+  **Band (aad47e3, submitted 18:44 UTC): 26 wins** (v38 27, v37 24), gathered 723 (772), banked
+  by r1000 325 (335), deaths 20.3 (19.7): level with v38 within noise, the mirror's +18 did not
+  carry. Plateau v36-v39 at 24-27 of 70. Contact attack rate is at the band's; the next gap to
+  measure is elsewhere (gathering per living turn, the opening, map-shaped losses).
 - Open: the hold/retreat classes are weak (the band's "hold" is mostly farming beside an enemy,
   which the head cannot tell from waiting); the head is one-sided towards attack, which is the
   measured gap (30% vs 43% attack rate) so that is the intended bias; fuel on 100x100 maps.
 
-### Where we are (v38, a88b3f9, live 2026-10-22 18:25 UTC)
+### Where we are (v39, aad47e3, live 2026-10-22 18:44 UTC)
 
 - Band wins on the same 70 games: v14 6, v26 12, v28 15, v31 16, v33 14, v34 11 (engine 1.0.3
-  from here), v35 17, v36 26, v37 24, v38 27. Deaths per game 19 to 20 throughout; gathering is the lever that
+  from here), v35 17, v36 26, v37 24, v38 27, v39 26. Deaths per game 19 to 20 throughout; gathering is the lever that
   moved (485 -> 577 -> 757 a game).
 - Ladder: v34 64% over 50 games, rank 179 / 1,663. 1,750 still needs about 60% against the
   opponents that come with it.
