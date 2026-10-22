@@ -42,7 +42,7 @@ RECALL_SAFE_ENEMY_TURNS = 5 # do not start a recall with an enemy closer than th
 
 # ---- Camp scoring ------------------------------------------------------------
 GEM_VALUE = 1.0
-GOLD_VALUE = 0.2            # (0.1 before v32; builds turned gold into a real edge) gems win games; gold only buys shards (150 gold = one emblem). Camps
+GOLD_VALUE = 0.1            # (0.2 in v32: band banked 24 by r300 vs 35, same wins; reverted) gems win games; gold only buys shards (150 gold = one emblem). Camps
                             # now pay about ten gold per gem, so this keeps gold a minority of value.
 CAPTURE_TURNS = 5
 DEATH_MEMORY = True         # a group this body died at lately scores lower (decide.score_camp) ...
