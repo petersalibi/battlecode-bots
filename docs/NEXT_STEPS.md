@@ -517,7 +517,15 @@ Three pieces, every constant with its range, all `COHESION` / `FLEE_TO_ALLY` / `
   own. The bot source is back at v39's exact content (698e410); the cohesion patch lives in
   history at ea06a6f. Live: v42 = v39's code (20:06 UTC). A fuel-burn probe (v39 + 20K a turn
   vs v39) measures how fragile the gates are; if it loses too, the gates need redesign before
-  any further per-turn feature.
+  any further per-turn feature. **Probe result: 37-43, -72, deaths 1436 vs 1296, exhaustions
+  59 (no extra).** Twenty thousand fuel a turn, under 1% of the budget and nowhere near an
+  exhaustion, costs six wins and 140 deaths through the gates alone. The dormant code was worse
+  still because its cost landed on retarget turns and at init (exhaustions 94). So the fuel
+  headroom item (7 below) is now the gate to every further per-turn feature: the heads must
+  stop depending on leftover fuel (run them first in the turn with a fixed budget, or size the
+  reserve from the actual act cost of the chosen mode rather than the worst seen), and every
+  change must be mirrored against the previous tag with the exhaustion column read as a
+  first-class result.
 
 ### Where we are (v39, aad47e3, live 2026-10-22 18:44 UTC)
 
