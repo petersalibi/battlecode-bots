@@ -178,6 +178,19 @@ class Actions:
     def farm(self, turn):
         w, d = self.w, self.d
         self.status = memory_codec.STATUS_FARM
+        if d.last_source == "regroup" and d.regroup_pos is not None:
+            # Opening: an enemy just came into sight and our nearest ally is a few tiles off. Step
+            # to it (a local field, 12 tiles out); hit back if something is in reach.
+            goals = Bitboard()
+            goals.draw_chebyshev(d.regroup_pos, 1)
+            goals &= ~w.static_blocked
+            if not goals.is_empty():
+                self.nav.step_along(self.nav.local_field(goals, 12))
+            enemy = w.nearest_enemy
+            if enemy is not None and enemy.dist <= w.attack_range:
+                self._attack_with_reset(enemy.champion, enemy.pos)
+            self.trace = "regroup"
+            return
         g = d.target_group
         engaged = g is not None and bool(self._camps_in_range(g.index))
         # Stale when the group was cleared or captured since we chose it (a group chosen while

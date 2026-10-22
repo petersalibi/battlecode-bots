@@ -48,6 +48,9 @@ class Decider:
         self.camp_source = "script"   # who ranked the camps at the last retarget
         self.gated_since = -1         # round the spawn gate started holding this body, or -1
         self.helping_group = None     # the group whose call for help this body answered
+        self.regroup_pos = None       # opening: the ally tile this body is stepping towards, and until when
+        self.regroup_until = -1
+        self.enemy_seen_round = -100  # last round an enemy was in sight (the first sighting starts a regroup)
         self.explore_mode = FARM      # self-play exploration: the mode being held and until when
         self.explore_until = -1
         self.risk_score = None        # the selector's death-risk lane this turn (None when it did not run)
@@ -247,6 +250,9 @@ class Decider:
                 self.target_group, self.target_state, self.target_bodies, self.target_round = g, g.state, 1, w.round
                 self.hold_since = -1
                 return self._set_mode(FARM, "alert")
+        pair = self._pair_rules(w)
+        if pair is not None:
+            return pair
         # Spawn camping (elk arena on the ladder: 79 deaths, most within 8 turns of our spawn at
         # full health, three enemies in sight): the spawn heals and enemies cannot enter it, so a
         # body that would walk out into a stronger group stays until it has left or allies are up.
@@ -353,6 +359,43 @@ class Decider:
             self.gated_since = -1
             return FIGHT if w.enemy_within(config.FIGHT_RANGE) else None
         return RECALL
+
+    def _pair_rules(self, w):
+        """Opening (band games: after an enemy first came into sight, our bodies died 11% of the time
+        whether or not an ally was within 4 tiles; the band's 5-6% with an ally, 8-9% alone; five
+        rounds on 52% of ours had an ally beside them, 60-68% of theirs):
+        - join: an ally within PAIR_JOIN_RANGE has an enemy within 3 tiles of it and an enemy is
+          near us too: fight beside it instead of deciding alone;
+        - regroup: on a first sighting with no ally within 4 but one within REGROUP_RANGE, step
+          towards that ally for a few turns before anything else."""
+        seen_before = self.enemy_seen_round
+        if w.enemies:
+            self.enemy_seen_round = w.round
+        if w.round > config.PAIR_ROUNDS or w.at_spawn or not w.allies:
+            self.regroup_pos = None
+            return None
+        if w.enemies:
+            if config.PAIR_JOIN and w.hp_ratio >= config.PAIR_MIN_HEALTH and w.nearest_enemy.dist <= config.PAIR_JOIN_RANGE:
+                for pos, hp, strength, d in w.allies:
+                    if d <= config.PAIR_JOIN_RANGE and hp > 0:
+                        for e in w.enemies:
+                            if e.pos.chebyshev_distance(pos) <= 3:
+                                self.regroup_pos = None
+                                return self._set_mode(FIGHT, "pair-join")
+            if config.REGROUP:
+                nearest = None
+                for pos, hp, strength, d in w.allies:
+                    if nearest is None or d < nearest[1]:
+                        nearest = (pos, d)
+                if self.regroup_pos is not None and w.round <= self.regroup_until and nearest is not None and nearest[1] > 2                         and w.nearest_enemy.dist > 2:
+                    self.regroup_pos = nearest[0]
+                    return self._set_mode(FARM, "regroup")
+                if w.round - seen_before > 3 and nearest is not None and 4 < nearest[1] <= config.REGROUP_RANGE                         and w.nearest_enemy.dist > 2:
+                    self.regroup_pos = nearest[0]
+                    self.regroup_until = w.round + config.REGROUP_TURNS
+                    return self._set_mode(FARM, "regroup")
+        self.regroup_pos = None
+        return None
 
     def should_stand(self, w):
         """Fleeing from a chaser in reach only gives it free hits (challenge games vs the top ten:
