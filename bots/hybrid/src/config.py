@@ -150,6 +150,7 @@ DASH_ROUTES = True              # champions with a dash route across thin holes 
 DASH_SQUARE_LANDINGS = True     # dash landings from the ability's range square (crosses holes) instead of walked tiles
 STUCK_TURNS = 10            # turns without a move or an action before a body drops its target ...
 STUCK_AVOID_ROUNDS = 20     # ... and leaves that group alone for this long (usually it is just crowded)
+FIRST_TURN_QUIET = 150_000   # below this after setup, the first turn logs nothing and ends at once
 FIRST_TURN_MIN = 1_000_000  # end the first turn without acting if setup left less than this ...
 FIRST_TURN_PER_TILE = 100   # ... plus this per map tile (field computes scale with the map area)
 LOG_EVERY = 100             # rounds between fuel log lines (0 disables)

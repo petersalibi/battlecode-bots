@@ -32,6 +32,10 @@ class Bot:
             w.init_static()
             self.nav = navigation.Navigator(w)
             self.act = actions.Actions(w, self.nav, self.d)
+            if fuel.remaining() < config.FIRST_TURN_QUIET:
+                # Setup left almost nothing (boss battle, islands: 23-43K): even the two log lines
+                # ran the turn out. Say nothing and end the turn; the next one finishes setup.
+                return
             # The plan (22 map features, picks) only in the group log: formatting it on the first
             # turn cost the last 50K of a budget that big maps already spend to within 100K.
             print("init: %s slot %d/%d groups=%d map=%dx%d dps=%d budget=%d init_fuel=%d profile=%s%s" % (
