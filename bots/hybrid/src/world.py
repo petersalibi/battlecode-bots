@@ -236,9 +236,6 @@ class World:
         self.holes = game_map.holes()
         self.bushes = game_map.bushes()
         self.altar_tiles = game_map.altars()
-        altars = self.altar_tiles.positions()
-        centre = cambc.Vec2(self.width // 2, self.height // 2)
-        self.central_altar = len(altars) == 1 and altars[0].chebyshev_distance(centre) <= config.CENTRAL_ALTAR_RADIUS
         self.spawn_ally = game_map.spawn_region(Team.ALLY)
         self.spawn_enemy = game_map.spawn_region(Team.ENEMY)
         # Terrain only: what a single step must avoid (units are added per turn by the navigator).
@@ -312,13 +309,6 @@ class World:
                 self.slot = index
                 break
         self.ally_champions = list(allies)
-        self.slot_of_handle = {}
-        for index, champion in enumerate(self.ally_champions):
-            try:
-                self.slot_of_handle[int(champion)] = index
-            except Exception:
-                pass
-        self.visible_ally_slots = {}   # slot -> (pos, hp, dist) for allies in sight this turn
         self._init_squads()
 
         self.kind = int(me.champion_name())
@@ -756,7 +746,6 @@ class World:
 
     def _refresh_allies(self):
         self.allies = []
-        self.visible_ally_slots = {}
         self.ally_power = self.hp * self.strength
         self.ally_power_eff = self.my_ehp() * self.my_dmg()
         for champion in vision.champions(Team.ALLY):
@@ -769,15 +758,6 @@ class World:
             except Exception:
                 continue
             self.allies.append((pos, hp, strength, pos.chebyshev_distance(self.pos)))
-            slot = self.slot_of_handle.get(int(champion))
-            if slot is not None:
-                bag = 0
-                if self.central_altar:                 # only the convoy/escort rules read the bag (an engine call each)
-                    try:
-                        bag = champion.gem_count()
-                    except Exception:
-                        bag = 0
-                self.visible_ally_slots[slot] = (pos, hp, pos.chebyshev_distance(self.pos), bag)
             if pos.chebyshev_distance(self.pos) <= config.FIGHT_RANGE:
                 self.ally_power += hp * strength
                 dmg, ehp = strength, hp
