@@ -427,6 +427,12 @@ class Actions:
                 self._cast_shield()
             self._heal_ally()
             return
+        if config.CAST_BEFORE_STEP:
+            # A spell that reaches the target now beats a step towards it: Ryth's and Marcella's
+            # range-4 spells exclude walking, and casting after the step never fired (band games:
+            # they cast on 12% of contact turns, the band's on 21-23%). An exclusive cast stops the
+            # step below; a compatible one still lets us walk.
+            self._cast_offensive(target.champion, target.pos, against_camp=False)
         # Close the distance. Ranged champions stop at their attack range. The target moves, so this
         # is a small uncached field around it rather than a whole-map field per position.
         goals = Bitboard()

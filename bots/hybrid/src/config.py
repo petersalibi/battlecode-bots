@@ -238,6 +238,7 @@ CHAMPION_KIT = {   # name: (STR, FOCUS, SHIELD)
 }
 # Band games, 129K contact samples: kills matched deaths only at a kit-power balance of about 2
 # (1.0-1.2: we lost two bodies per kill). The rules' balance is scaled by this so 1.0 means even.
+CAST_BEFORE_STEP = True     # in a fight, cast a spell that already reaches the target before stepping (actions.fight)
 CHASE = True                # run down a weak enemy close by (decide._chase_rule) ...
 CHASE_RANGE = 4
 CHASE_HP = 0.35             # ... at or below this share of its health ...
