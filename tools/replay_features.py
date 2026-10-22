@@ -129,10 +129,11 @@ class Cand:
 
 
 class Enemy:
-    __slots__ = ("pos", "hp", "max_hp", "strength", "gems", "dist", "handle")
+    __slots__ = ("pos", "hp", "max_hp", "strength", "gems", "dist", "handle", "reach")
 
     def __init__(self, c, me):
         self.handle = c["i"]
+        self.reach = 3 if KITS.get(c.get("type"), (False, []))[0] else 1
         self.pos = Vec(c["x"], c["y"])
         self.hp, self.max_hp = float(c["hp"]), float(max(c["max"], 1))
         self.strength = float(c["str"] or 40)

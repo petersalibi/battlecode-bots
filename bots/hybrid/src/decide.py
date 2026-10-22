@@ -12,6 +12,7 @@ import datalog
 import features
 import fuel
 import memory_codec
+import contact_features
 import nn
 import weights
 import weights_adv
@@ -70,6 +71,7 @@ class Decider:
         self.squad_fled_round = -10   # squads: last round the leader's retreat pulled us off a group
         self.squad_hold_round = -1    # squads: round a follower stands still instead of walking into a retreat
         self.squad_stats = {}         # squads: counts of follow outcomes and hold turns (the periodic log line)
+        self.contact_pick = None      # the contact head's last action (contact_features.ATTACK..)
         self.commit_mode = None       # FIGHT or FLEE held for FIGHT_COMMIT_TURNS (decide._commitment), and until when
         self.commit_until = -1
         self.outnumbered_turns = 0    # turns running with 2+ enemies near (the outnumbered rule needs OUTNUMBERED_TURNS)
@@ -244,12 +246,18 @@ class Decider:
         # Hard rule: a badly hurt champion with an enemy close by runs, and keeps running while
         # the enemy is in sight (hysteresis stops flee flipping back every other turn).
         if w.enemies and not w.at_spawn:
-            if w.hp_ratio < config.FLEE_HEALTH and w.enemy_within(config.FLEE_ENEMY_RANGE):
+            flee_line = config.FLEE_HEALTH
+            if config.USE_NN_CONTACT and self._contact_ready(w):
+                flee_line = config.CONTACT_FLOOR                      # the head decides above the floor
+            if w.hp_ratio < flee_line and w.enemy_within(config.FLEE_ENEMY_RANGE):
                 return self._set_mode(FLEE, "rule")
-            if self.mode == FLEE and w.hp_ratio < config.RECALL_HEALTH:
+            if self.mode == FLEE and w.hp_ratio < config.RECALL_HEALTH and not (config.USE_NN_CONTACT and self._contact_ready(w)):
                 return self._set_mode(FLEE, "rule")
         if not w.at_spawn and self.camp_hitting(w) and w.hp_ratio < config.FLEE_HEALTH:
             return self._set_mode(FLEE, "rule")                       # a camp is finishing us off
+        contact = self._contact_head(w, turn, mask)
+        if contact is not None:
+            return self._set_mode(contact, "contact")
         committed = self._commitment(w, mask)
         if committed is not None:
             return self._set_mode(committed, "commit")
@@ -412,6 +420,35 @@ class Decider:
             self.gated_since = -1
             return FIGHT if w.enemy_within(config.FIGHT_RANGE) else None
         return RECALL
+
+    def _contact_ready(self, w):
+        """The contact head can speak this turn: on, an enemy within CONTACT_RANGE, off spawn,
+        health above the floor, past the opening, fuel in hand."""
+        net = getattr(weights, "CONTACT_HEAD", None)
+        return (net is not None and w.enemies and not w.at_spawn and w.hp_ratio >= config.CONTACT_FLOOR
+                and w.enemy_within(config.CONTACT_RANGE) and w.round > config.NN_SKIP_ROUNDS
+                and fuel.can_afford(config.CONTACT_FUEL, self.nn_reserve(w)))
+
+    def _contact_head(self, w, turn, mask):
+        """Imitation of the band in contact (contact_features): ATTACK or CLOSE -> FIGHT, RETREAT
+        -> FLEE, HOLD -> None (the rules and the selector carry on). Silent under the margin."""
+        if not config.USE_NN_CONTACT or not self._contact_ready(w):
+            return None
+        try:
+            w.ensure_feature_state(self)
+            scores = weights.CONTACT_HEAD.forward(contact_features.build(w, self))
+            ok = [True] * contact_features.N_ACTIONS
+            if nn.margin(scores, ok) < getattr(weights, "CONTACT_HEAD_MARGIN", 0):
+                return None
+            pick = nn.masked_argmax(scores, ok)
+            self.contact_pick = pick
+            if pick in (contact_features.ATTACK, contact_features.CLOSE) and mask[FIGHT]:
+                return FIGHT
+            if pick == contact_features.RETREAT and mask[FLEE]:
+                return FLEE
+        except Exception:
+            pass
+        return None
 
     def _commitment(self, w, mask):
         """A fight or a retreat, once chosen, is held for FIGHT_COMMIT_TURNS: on gold rush a leader

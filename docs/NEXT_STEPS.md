@@ -341,7 +341,11 @@ adjacent at the start and 245 hit it. A melee body at 30-45% with a melee chaser
 - Stand knobs for the tuning pass: `STAND_FUTILE_MIN_HEALTH` [0.25-0.5], `STAND_MIN_BALANCE`
   [0-0.9], `STAND_ESCAPE` [0-4] (a bush or spawn that close, or a ready dash, means run). The
   first tools/tune.py sweep of the health knob (0.5/0.35/0.25) was 33-47 / 28-52 / 34-46,
-  all with a wrong first version of the rule (allies counted as an escape); unswept since.
+  all with a wrong first version of the rule (allies counted as an escape). Rerun on the fixed
+  rule against v37 (tools/tune.py, 80 games a point): 0.5 (current) 40-40 +15, 0.35 34-46 -37,
+  0.25 34-46 -100 with deaths 1504 vs 1150. The mirror's chasers run a body down harder than the
+  band's do, so standing at low health loses there; 0.5 stays, and the band is the only judge
+  left for a lower value (one submission a point).
 - `DOOMED_RULE` (Tyler: a guaranteed death is spent on damage, not on running): dead within
   `DOOMED_TURNS` to the enemies already in reach, nothing safe that close, no dash: fight the
   finishable kill. Off: 41-39 with it against 51-29 without, deaths 947 vs 857. The chasers in
@@ -393,6 +397,31 @@ adjacent at the start and 245 hit it. A melee body at 30-45% with a melee chaser
   dies less after its own hides (6% vs 10%) and attacks from bushes a little more (17% vs 14%).
   Not a big lever. Cheap later: chase a weak target to its last seen tile for three turns when it
   vanishes within three tiles (the chase rule drops it the moment it is unseen).
+
+### 4f. Contact head (built 2026-10-22 evening, after v37): imitation of the band in contact
+
+Tyler's call after the flee study: scripted cornered rule now, an imitation head next, no
+learned death-value. The head decides what a body does with an enemy within `CONTACT_RANGE`
+(4): ATTACK / CLOSE -> FIGHT, RETREAT -> FLEE, HOLD -> the rules and selector carry on. It sits
+above the commitment, outnumbered and selector logic and below the hard floor: under
+`CONTACT_FLOOR` (0.25) health the FLEE_HEALTH rule stands whatever it says. Silent under its
+margin. Pieces: `bots/hybrid/src/contact_features.py` (24 features both worlds share: health,
+strength, dps, ranged, ability ready, nearest enemy distance/health/reach/strength, enemies
+within 2/4/6, incoming strength in reach, weakest enemy, strength-only balance, allies within
+4/8, gems, damage taken, bush, spawn, turns home, round), `tools/replay_contact_dataset.py`
+(labels from the engine's own action steps on the band's turns: attack on a champion, step that
+closes, step that opens, else hold), `tools/train_contact_head.py` (24-16-4 MLP, the selector's
+int8 quantiser, writes CONTACT_HEAD into weights.py), parity_test covers it. `USE_NN_CONTACT`.
+
+- Data: the band's turns in the four engine-1.0.3 band runs (v34-v37, 280 games): 208,627
+  contact rows, attack 42% / close 20% / hold 19% / retreat 19%.
+- Held-out (42 games): 67.6% vs the 42% majority; recall attack 94%, close 83%, retreat 43%,
+  hold 21%. At the 0.5-logit margin it speaks on 77% of rows at 74.7%. Int8 agrees 98.2%.
+- Mirror vs v37, 80 games: **48-32, +54, gems/100 55.7 vs 51.8, deaths 1302 vs 1367**
+  (both up: more fights), exhaustions 58 (v37 runs 39-50), stalls 250.
+- Open: the hold/retreat classes are weak (the band's "hold" is mostly farming beside an enemy,
+  which the head cannot tell from waiting); the head is one-sided towards attack, which is the
+  measured gap (30% vs 43% attack rate) so that is the intended bias; fuel on 100x100 maps.
 
 ### Where we are (v37, d96bd94, live 2026-10-22 17:57 UTC)
 

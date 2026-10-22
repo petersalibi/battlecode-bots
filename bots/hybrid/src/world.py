@@ -124,7 +124,7 @@ def champion_power(champion, hp, strength):
 
 
 class Enemy:
-    __slots__ = ("champion", "handle", "pos", "hp", "max_hp", "strength", "gems", "dist", "dmg", "ehp", "on_spawn")
+    __slots__ = ("champion", "handle", "pos", "hp", "max_hp", "strength", "gems", "dist", "dmg", "ehp", "on_spawn", "reach")
 
     def __init__(self, champion, my_pos):
         self.champion = champion
@@ -144,6 +144,10 @@ class Enemy:
                 pass
         self.dist = my_pos.chebyshev_distance(self.pos)
         self.on_spawn = False                    # standing on its own spawn (set by World._refresh_enemies)
+        try:
+            self.reach = max(1, champion.attack_range())   # 1 melee, 3 ranged (contact features, threat tests)
+        except Exception:
+            self.reach = 1
         try:
             self.gems = champion.gem_count()
         except Exception:

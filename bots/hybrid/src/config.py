@@ -140,6 +140,12 @@ NN_CAMP_TOP = 8             # the scorer re-ranks only the script's best this ma
 USE_NN_ESCAPE = False       # the escape head in weights.ESCAPE_HEAD picks the flee step (actions._escape_step)
 ESCAPE_FUEL = 400_000       # fuel the escape head needs in hand (stay + ESCAPE_TOP tiles at ~60K each)
 ESCAPE_TOP = 4              # neighbours the escape head scores, the furthest from the nearest threat
+USE_NN_CONTACT = True       # the contact head in weights.CONTACT_HEAD (attack / close / hold / retreat with an enemy within
+                            # CONTACT_RANGE), trained by imitation of the band's own turns (tools/train_contact_head.py); it
+                            # decides above CONTACT_FLOOR health, the script's hard rules keep the floor (decide._contact_head)
+CONTACT_RANGE = 4
+CONTACT_FLOOR = 0.25        # below this health the FLEE_HEALTH rule stands whatever the head says [0.2-0.35]
+CONTACT_FUEL = 150_000      # fuel the contact head needs in hand (24 features, 24-16-4 forward)
 USE_NN_FIGHT = False        # the fight head in weights.FIGHT_HEAD picks the enemy to attack (decide.choose_fight_target)
 FIGHT_FUEL = 300_000        # fuel the fight head needs in hand (up to FIGHT_HEAD_MAX enemies)
 FIGHT_HEAD_MAX = 6
