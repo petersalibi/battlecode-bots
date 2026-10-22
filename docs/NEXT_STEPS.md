@@ -507,6 +507,17 @@ Three pieces, every constant with its range, all `COHESION` / `FLEE_TO_ALLY` / `
   only runs an hour apart are paired; a control run of the live version alongside every
   experiment is worth its 70 games; (2) effects under ~5 wins cannot be read on the band at
   all. Cohesion stays off; a single-piece band test needs a bigger expected effect.
+- **Correction (20:10 UTC, Tyler: "v39 is noticeably better"):** v41 was not a control. v39 vs
+  v41 in the mirror: 50-30 for v39, deaths 1258 vs 1400; v39 vs itself (two tags of the same
+  commit): 40-40 with all 40 maps mirrored exactly. The dormant cohesion code (every switch
+  off) costs a few thousand fuel a turn of bookkeeping plus ~140K at init, and the networks'
+  `fuel.can_afford` gates turned that into a measurably worse bot (the heads spoke on 4.2% of
+  decisions instead of 4.6%, exhaustions 94 vs 60). Gating the bookkeeping too still lost
+  36-44. So the "band updated" reading above is confounded: v41's drop is at least partly its
+  own. The bot source is back at v39's exact content (698e410); the cohesion patch lives in
+  history at ea06a6f. Live: v42 = v39's code (20:06 UTC). A fuel-burn probe (v39 + 20K a turn
+  vs v39) measures how fragile the gates are; if it loses too, the gates need redesign before
+  any further per-turn feature.
 
 ### Where we are (v39, aad47e3, live 2026-10-22 18:44 UTC)
 
