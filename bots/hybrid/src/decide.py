@@ -65,6 +65,9 @@ class Decider:
         self.squad_fled_round = -10   # squads: last round the leader's retreat pulled us off a group
         self.squad_hold_round = -1    # squads: round a follower stands still instead of walking into a retreat
         self.squad_stats = {}         # squads: counts of follow outcomes and hold turns (the periodic log line)
+        self.commit_mode = None       # FIGHT or FLEE held for FIGHT_COMMIT_TURNS (decide._commitment), and until when
+        self.commit_until = -1
+        self.outnumbered_turns = 0    # turns running with 2+ enemies near (the outnumbered rule needs OUTNUMBERED_TURNS)
         self.capture_wait = 0         # squads: turns a follower has waited beside its leader's capture
         self.squad_logged = -1        # squads: the leader's group we last logged following
 
@@ -211,6 +214,9 @@ class Decider:
                 elif in_range and balance >= 1.0:
                     # Already in range: trading is free for melee, and letting them hit us is not.
                     scores[FIGHT] = 1.5 if w.damage_taken > 0 else 1.0
+                if config.FIGHT_COMMIT and self.mode == FIGHT and balance >= config.FIGHT_STAY_RATIO \
+                        and w.hp_ratio >= config.FLEE_HEALTH:
+                    scores[FIGHT] = max(scores[FIGHT], 1.1)          # a fight under way goes on past the entry bar
             if enemy_near and balance < config.FLEE_POWER_RATIO:
                 scores[FLEE] = 1.4 + 0.5 * (1 - w.hp_ratio)
             elif enemy_near and w.hp_ratio < config.RECALL_HEALTH:
@@ -238,10 +244,18 @@ class Decider:
                 return self._set_mode(FLEE, "rule")
         if not w.at_spawn and self.camp_hitting(w) and w.hp_ratio < config.FLEE_HEALTH:
             return self._set_mode(FLEE, "rule")                       # a camp is finishing us off
-        if config.OUTNUMBERED_RULE and not w.at_spawn and len(w.enemies) >= 2                 and w.enemy_within(config.FLEE_ENEMY_RANGE + config.FLEE_GROUP_EXTRA):
+        committed = self._commitment(w, mask)
+        if committed is not None:
+            return self._set_mode(committed, "commit")
+        outnumbered = (config.OUTNUMBERED_RULE and not w.at_spawn and len(w.enemies) >= 2
+                       and w.enemy_within(config.FLEE_ENEMY_RANGE + config.FLEE_GROUP_EXTRA))
+        self.outnumbered_turns = self.outnumbered_turns + 1 if outnumbered else 0
+        if outnumbered and (self.outnumbered_turns >= config.OUTNUMBERED_TURNS or self.mode == FLEE):
             # Outnumbered by a stronger group: run, and keep running while they are in sight
             # (elk arena on the ladder: full-health bodies flipped from flee to capture with three
             # enemies beside them and died within five turns). A hard rule, above the network.
+            # It needs OUTNUMBERED_TURNS turns of 2+ enemies first: with the count crossing 2 every
+            # other turn the rule flipped healthy bodies between flee and farm turn by turn.
             balance = w.power_balance()
             if balance < config.FLEE_POWER_RATIO or (self.mode == FLEE and balance < config.OUTNUMBERED_STAY_BALANCE):
                 return self._set_mode(FLEE, "rule")
@@ -393,6 +407,30 @@ class Decider:
             return FIGHT if w.enemy_within(config.FIGHT_RANGE) else None
         return RECALL
 
+    def _commitment(self, w, mask):
+        """A fight or a retreat, once chosen, is held for FIGHT_COMMIT_TURNS: on gold rush a leader
+        at 80% health alternated flee, farm and capture every other turn with two enemies in
+        sight, each flip a free hit for them (the outnumbered rule turns on and off with the
+        enemy count, and the balance sits near 1). A fight is released early when the balance
+        falls under FIGHT_STAY_RATIO or nothing is in sight; a retreat once the balance is back
+        over FLEE_EXIT_RATIO with health to fight. The hard health rules above still win."""
+        if not config.FIGHT_COMMIT or self.commit_mode is None:
+            return None
+        mode = self.commit_mode
+        if w.round >= self.commit_until or w.at_spawn or not mask[mode]:
+            self.commit_mode = None
+            return None
+        balance = w.power_balance()
+        if mode == FIGHT:
+            if not w.enemies or balance < config.FIGHT_STAY_RATIO or w.hp_ratio < config.FLEE_HEALTH:
+                self.commit_mode = None
+                return None
+            return FIGHT
+        if balance >= config.FLEE_EXIT_RATIO and w.hp_ratio >= config.FIGHT_MIN_HEALTH:
+            self.commit_mode = None
+            return None
+        return FLEE
+
     def _squad_rule(self, w):
         """A follower whose leader has been retreating from the squad's group for
         SQUAD_RETREAT_ROUNDS rounds running (its claim: BUSY with that group) retreats too: the
@@ -526,6 +564,10 @@ class Decider:
         else:
             self.mode = mode
             self.mode_turns = 0
+            if config.FIGHT_COMMIT and (mode == FIGHT or (mode == FLEE and config.FLEE_COMMIT)) and source != "commit":
+                # A new fight (or, with FLEE_COMMIT, retreat) decision: hold it (decide._commitment).
+                self.commit_mode = mode
+                self.commit_until = self.cur_w.round + config.FIGHT_COMMIT_TURNS if getattr(self, "cur_w", None) is not None else -1
         self.last_source = source
         return mode
 

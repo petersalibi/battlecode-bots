@@ -308,6 +308,20 @@ SQUAD_CAPTURE_WAIT = 8      # a follower beside a group its leader is capturing 
 SQUAD_LOG = True            # one line when a follower adopts a target or a squad retreat fires (cheap)
 BREAKOUT_SIGNAL = False     # (off: alone vs v33 35-43, deaths 915 vs 866) the spawn gate's break-out byte (v8): decide.py never
                             # imported memory_codec, so the write and the read raised inside try/except and every gated body left on its own test
+# Fight commitment and kiting (2026-10-22). Values in [brackets] are the ranges a later tuning pass
+# should search; every constant here is a candidate for tools/tune.py or a ladder arm.
+FIGHT_COMMIT = True         # a fight or flee decision is held (decide._commitment) ...
+FIGHT_COMMIT_TURNS = 3      # ... for this many turns [2-5] unless health crosses FLEE_HEALTH or the enemy is gone ...
+FLEE_COMMIT = False         # ... retreats too (off: one-turn flee flickers became three-turn retreats, median 1 to 3, and
+                            # deaths rose 880 to 931 vs v34; retreating is where our bodies die) [ladder arm candidate]
+OUTNUMBERED_TURNS = 2       # the outnumbered rule fires after this many turns running with 2+ enemies near [1-3]: the
+                            # flicker came from the enemy count crossing 2 every other turn
+FIGHT_STAY_RATIO = 0.9      # ... a fight goes on while the calibrated balance stays above this [0.7-1.1]; entry needs FIGHT_POWER_RATIO
+FLEE_EXIT_RATIO = 1.25      # ... a retreat ends early once the balance is back above this [1.0-1.5] with FIGHT_MIN_HEALTH in hand
+KITE = True                 # a ranged body in a fight dashes away from an adjacent melee enemy, then attacks (actions._kite):
+                            # a dash is an ability, so unlike a step it does not use the ranged move-or-attack allowance (probe
+                            # 2026-10-22: dash then attack ran, step then attack raised "Attack already used")
+KITE_MIN_GAP = 2            # ... landing at least this far from every melee enemy [2-3], target still in attack range
 MODE_EXPLORE = 0.0          # data runs only: probability the chosen mode is swapped for another legal one
 MODE_EXPLORE_SALT = 0       # varies per sweep so the same turn explores differently
 MODE_EXPLORE_HOLD = 3       # an explored mode is held this many turns (one-turn deviations have no measurable outcome)

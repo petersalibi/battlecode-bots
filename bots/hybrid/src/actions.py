@@ -479,6 +479,8 @@ class Actions:
             self.claim_group = self.d.target_group.index           # the squad's plan survives the fight
         in_range = target.dist <= w.attack_range
         if in_range:
+            if config.KITE and w.is_ranged:
+                self._kite(target)                                  # a dash does not spend the attack
             self._cast_offensive(target.champion, target.pos, against_camp=False)
             self._attack_with_reset(target.champion, target.pos)
             if w.damage_taken > 0:
@@ -510,6 +512,54 @@ class Actions:
             self._attack_with_reset(target.champion, target.pos)
             self._cast_offensive(target.champion, target.pos, against_camp=False)
         self._heal_ally()
+
+    def _kite(self, target):
+        """Ranged body with a melee enemy beside it: dash to a tile that keeps the target in attack
+        range and puts KITE_MIN_GAP or more between us and every melee enemy, then attack as usual.
+        The chaser spends its next turn closing instead of hitting. Returns True when it fired."""
+        w = self.w
+        if not w.can_cast or w.cast_exclusive:
+            return False
+        melee = []
+        for e in w.enemies:
+            if e.dist <= 1:
+                try:
+                    reach = e.champion.attack_range()
+                except Exception:
+                    reach = 1
+                if reach <= 1:
+                    melee.append(e.pos)
+        if not melee:
+            return False
+        for rec in w.abilities:
+            if not rec.is_dash or not self._ready(rec):
+                continue
+            try:
+                landings = rec.ability.valid_tiles() & ~self.nav.blocked()
+                best, best_key = None, None
+                for tile in landings.positions():
+                    if tile.chebyshev_distance(target.pos) > w.attack_range:
+                        continue
+                    gap = min(tile.chebyshev_distance(m) for m in melee)
+                    if gap < config.KITE_MIN_GAP:
+                        continue
+                    key = (gap, 1 if w.bushes.is_set(tile) else 0, -tile.chebyshev_distance(target.pos))
+                    if best_key is None or key > best_key:
+                        best, best_key = tile, key
+                if best is None:
+                    return False
+                if rec.ability.use(best):
+                    w.can_cast = False
+                    self.nav.occupy(w.pos)
+                    w.pos = best
+                    w.at_spawn = w.spawn_ally.is_set(best)
+                    w.in_bush = w.bushes.is_set(best)
+                    self.nav.blocked().set(best, True)
+                    self.trace += " kite"
+                    return True
+            except Exception:
+                return False
+        return False
 
     # ---- flee ----------------------------------------------------------------------
     def flee(self, turn):
