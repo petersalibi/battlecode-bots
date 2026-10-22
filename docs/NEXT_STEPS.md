@@ -490,6 +490,14 @@ Three pieces, every constant with its range, all `COHESION` / `FLEE_TO_ALLY` / `
   points), so the mirror cannot rank them; both on is the best point and the band judges.
   Exhaustions 100-113 (v39 ~70): the extra per-turn work tips the big maps; the ally bag read is
   now central-map only.
+- **Band (v40, e456aef, 19:31 UTC): 17 wins (v39 26), deaths 23.6 (20.3), gathered 582 (723),
+  ally within 4 tiles 27.0% (25.9%): a clear loss and no grouping gain.** Per map: fragment
+  5->0 wins with deaths 22->37 and gathered 902->258, swirl 4->2, starfish 3->1, packs 2->1;
+  the two central-altar maps (eight, hooks) unchanged, so the convoy did nothing and the harm
+  is the flee lean and/or the camp bonus on open maps. All four switches off again (= v39
+  behaviour, submitted as v41 as the ladder restore and a band noise control). Lesson: the
+  mirror's "both on is best" was wrong, as predicted for a cohesion change; the band must test
+  each piece alone, one submission an hour (FLEE_TO_ALLY alone, then COHESION alone).
 
 ### Where we are (v39, aad47e3, live 2026-10-22 18:44 UTC)
 
