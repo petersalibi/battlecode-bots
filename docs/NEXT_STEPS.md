@@ -383,11 +383,21 @@ adjacent at the start and 245 hit it. A melee body at 30-45% with a melee chaser
   rounds); the blind-contest give-up repeats every 60 rounds per body (`CAPTURE_STANDOFF_AVOID`
   is per body, not shared); we never place altar locks ourselves (10 gold, cancels an enemy
   tribute, costs them five attacks).
+- **Submitted as v37 (d96bd94, 2026-10-22 17:57 UTC).** Band, same 70 games: 24 wins (v36 26,
+  within the +-4 noise), banked by r300 / r600 / r1000 51.1 / 156.1 / 320.5 (v36 48.6 / 135.5 /
+  283.7: the best banking curve of any version), deaths 18.9 (v36 19.3), gathered 703 (757).
+- Bushes (Tyler's question, tools/analysis/bushes.py and unseen.py on the v36 band): both sides
+  spend 10.5% of living turns in bushes, hide 36 (us) / 43 (band) times a game with contact
+  broken 57% / 55% of the time; after the other side hides, we reach the bush 13% and walk away
+  42%, the band 17% / 37%; a weak hider near us is killed within 6 turns 24% (band 29%). The band
+  dies less after its own hides (6% vs 10%) and attacks from bushes a little more (17% vs 14%).
+  Not a big lever. Cheap later: chase a weak target to its last seen tile for three turns when it
+  vanishes within three tiles (the chase rule drops it the moment it is unseen).
 
-### Where we are (v36, 851576c, live 2026-10-22 17:45 UTC)
+### Where we are (v37, d96bd94, live 2026-10-22 17:57 UTC)
 
 - Band wins on the same 70 games: v14 6, v26 12, v28 15, v31 16, v33 14, v34 11 (engine 1.0.3
-  from here), v35 17, v36 26. Deaths per game 19 to 20 throughout; gathering is the lever that
+  from here), v35 17, v36 26, v37 24. Deaths per game 19 to 20 throughout; gathering is the lever that
   moved (485 -> 577 -> 757 a game).
 - Ladder: v34 64% over 50 games, rank 179 / 1,663. 1,750 still needs about 60% against the
   opponents that come with it.
