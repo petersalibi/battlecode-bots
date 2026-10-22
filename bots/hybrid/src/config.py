@@ -225,6 +225,17 @@ ALERT_MIN_HEALTH = 0.6      # ... and at least this healthy
 EARLY_LEAVE = False         # (off: with the alert fixed 29-49 (-46) vs v14) two enemies within ALERT_SIGHT, weaker, no ally within EARLY_LEAVE_ALLY_RANGE: flee now (no stand)
 EARLY_LEAVE_ALLY_RANGE = 5
 EARLY_HOLD_MAX = 0          # (off: no measurable effect on the band; 10 when on) in the opening wait at most this long beside a camp for helpers (three-body clears took 46 turns, the band's 16)
+# Per champion (GameRules kits): damage a turn = strength x STR + focus x FOCUS, health counted with
+# shields = health + focus x SHIELD. Abilities: 8-turn cooldowns, one cast a turn, so a spell of
+# k x focus adds k/8 a turn; an attack reset adds 1/8 of strength. Used when CHAMPION_POWER is on.
+CHAMPION_POWER = True
+CHAMPION_KIT = {   # name: (STR, FOCUS, SHIELD)
+    "CASSI": (1.0, 0.25, 0.0), "ISSAC": (1.125, 0.0, 0.0), "RYTH": (1.125, 0.125, 0.0),
+    "VESPER_VALE": (1.125, 0.0, 0.0), "PRISM": (1.0, 0.31, 0.0), "STELLAR": (1.0, 0.43, 0.0),
+    "VENDETTA": (1.125, 0.0, 0.0), "MARCELLA": (1.125, 0.25, 0.0), "TAVI": (1.125, 0.18, 0.0),
+    "WILLOW": (1.125, 0.0, 0.0), "REN": (1.0, 0.28, 0.0), "VARG": (1.25, 0.0, 2.5),
+    "HEART_OF_RUIN": (1.0, 0.22, 1.5),
+}
 FOCUS_POWER_WEIGHT = 0.25   # power = health x (strength + this x focus) in fight rules (world.power_balance); 0 = strength only
 SPAWN_STRIKE = True         # a body held on our spawn hits enemies in reach (actions.recall)
 NO_RECALL_IN_CONTACT = True # no recall (and cancel one) with an enemy within RECALL_CONTACT_RANGE at RECALL_CONTACT_HEALTH+
