@@ -266,6 +266,15 @@ class Decider:
         chase = self._chase_rule(w)
         if chase is not None:
             return chase
+        if config.CAPTURE_OWN_CLEAR and mask[CAPTURE] and not w.at_spawn:
+            # Band games: 17% of our camp hits went into groups the enemy then captured (theirs: 7%);
+            # we captured 56% of the groups we engaged, they 68%. A group we just cleared, right
+            # beside us, is captured now unless a clearly stronger enemy group stands there.
+            g0, travel = turn.captures()[0]
+            mine = self.target_group is not None and g0.index == self.target_group.index
+            if travel <= config.CAPTURE_OWN_TRAVEL and (mine or travel == 0):
+                if not w.enemies or w.power_balance() >= config.CAPTURE_OWN_BALANCE:
+                    return self._set_mode(CAPTURE, "own-clear")
         # Spawn camping (elk arena on the ladder: 79 deaths, most within 8 turns of our spawn at
         # full health, three enemies in sight): the spawn heals and enemies cannot enter it, so a
         # body that would walk out into a stronger group stays until it has left or allies are up.
