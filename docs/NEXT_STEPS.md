@@ -425,6 +425,15 @@ int8 quantiser, writes CONTACT_HEAD into weights.py), parity_test covers it. `US
   (v38, the head) against the band's 43%; damage traded 0.61 -> 0.75 -> 0.81; flee is 28% of
   contact turns (36%) and those turns now attack 20% (1.7%). Deaths are flat, so the extra
   fighting is paid for.
+- **Second pass (v39, 2026-10-22 ~19:00 UTC):** labels drop camp hits and channel starts (the
+  script's business) and count a spell on or beside an enemy as an attack; five new features
+  (a living camp in reach, camps within 4, turns to the altar, retreated / fought last turn,
+  N_CONTACT 29). Five band runs (v34-v38, 350 games). Held-out 70.4% vs 48.5% majority; recall
+  attack 87%, close 82%, retreat 58% (was 43%), hold 8% (hold is now "stood still without
+  attacking": cooldown waits and stuns, and it maps to the script anyway). Speaks on 84% at
+  75.6%. Mirror vs v38: **49-31, +123, gems/100 58.3 vs 49.4, deaths 1308 vs 1405**; exhaustions
+  70 (big world 21, lanes 10, lost world 8: contact turns on big maps; CONTACT_FUEL raised to
+  250K). Band policy (Tyler): the v14 band stays the reference until a version wins 36+ of 70.
 - Open: the hold/retreat classes are weak (the band's "hold" is mostly farming beside an enemy,
   which the head cannot tell from waiting); the head is one-sided towards attack, which is the
   measured gap (30% vs 43% attack rate) so that is the intended bias; fuel on 100x100 maps.

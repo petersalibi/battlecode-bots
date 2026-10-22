@@ -31,13 +31,24 @@ HORIZON = 10
 K_MOVE, K_ATTACK = 4, 5
 
 
+K_CAST, K_RECALL, K_SUBMIT = 6, 11, 12
+
+
 def label(turn, w):
-    """What the body did this turn, from the engine's own action steps."""
+    """What the body did this turn, from the engine's own action steps. None for turns the head
+    should not learn from: hitting a camp (farming beside an enemy: the script's business) and
+    starting a recall or a tribute."""
     enemy_tiles = {(e.pos.x, e.pos.y) for e in w.enemies}
     moved_to = None
     for a in turn["actions"]:
-        if a["k"] == K_ATTACK and "to" in a and tuple(a["to"]) in enemy_tiles:
-            return cf.ATTACK
+        if a["k"] in (K_RECALL, K_SUBMIT):
+            return None
+        if a["k"] == K_ATTACK and "to" in a:
+            if tuple(a["to"]) in enemy_tiles:
+                return cf.ATTACK
+            return None                                     # a camp
+        if a["k"] == K_CAST and "to" in a and any(max(abs(a["to"][0] - x), abs(a["to"][1] - y)) <= 1 for x, y in enemy_tiles):
+            return cf.ATTACK                                # a spell on or beside an enemy
         if a["k"] == K_MOVE and "to" in a:
             moved_to = tuple(a["to"])
     if moved_to is None or not w.enemies:
@@ -95,8 +106,14 @@ def process(path, keep_team, won, rating):
         if w.nearest_enemy is None or w.nearest_enemy.dist > config.CONTACT_RANGE or w.at_spawn:
             continue
         x = cf.build(w, tr.decider)
+        act = label(t, w)
+        if act is None:
+            continue
+        # The bot's decider.mode at the next contact turn is this turn's decision (the head's
+        # "last turn" features); mirror it on the offline decider.
+        tr.decider.mode = config.FIGHT if act in (cf.ATTACK, cf.CLOSE) else config.FLEE if act == cf.RETREAT else tr.decider.mode
         X.append(np.array(x, dtype=np.uint8))
-        y.append(label(t, w))
+        y.append(act)
         meta.append((t["round"], w.slot, t["team"], 1 if won.get(t["team"]) else 0,
                      1 if died_within(t["champ"], t["round"], HORIZON) else 0, int(w.hp_ratio * 100)))
     if not X:

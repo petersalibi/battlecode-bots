@@ -10,7 +10,7 @@ is the strength-only `power_balance_raw`, which the offline world mirrors exactl
 import config
 from features import clip, turns
 
-N_CONTACT = 24
+N_CONTACT = 29
 ATTACK, CLOSE, HOLD, RETREAT = 0, 1, 2, 3
 N_ACTIONS = 4
 ACTION_NAMES = ("attack", "close", "hold", "retreat")
@@ -71,4 +71,22 @@ def build(w, decider):
     x[21] = 255 if w.at_spawn else 0
     x[22] = turns(w.turns_to_spawn)
     x[23] = clip(w.round / 8)
+    # What the band's "hold" and "retreat" key off (second training pass, 2026-10-22): a living camp
+    # in reach (farming beside an enemy), camps close by, the altar's distance (a carrier heading
+    # home), and what this body did last turn (their own hysteresis).
+    camp_in_reach, camps_near = 0, 0
+    for camp, gi, pos, hp in w.visible_camps:
+        if hp <= 0:
+            continue
+        d = w.pos.chebyshev_distance(pos)
+        if d <= w.attack_range:
+            camp_in_reach = 1
+        if d <= 4:
+            camps_near += 1
+    x[24] = 255 if camp_in_reach else 0
+    x[25] = clip(64 * camps_near)
+    x[26] = turns(w.turns_to_altar)
+    mode = getattr(decider, "mode", None)
+    x[27] = 255 if mode == config.FLEE else 0
+    x[28] = 255 if mode == config.FIGHT else 0
     return x

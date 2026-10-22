@@ -145,7 +145,7 @@ USE_NN_CONTACT = True       # the contact head in weights.CONTACT_HEAD (attack /
                             # decides above CONTACT_FLOOR health, the script's hard rules keep the floor (decide._contact_head)
 CONTACT_RANGE = 4
 CONTACT_FLOOR = 0.25        # below this health the FLEE_HEALTH rule stands whatever the head says [0.2-0.35]
-CONTACT_FUEL = 150_000      # fuel the contact head needs in hand (24 features, 24-16-4 forward)
+CONTACT_FUEL = 250_000      # fuel the contact head needs in hand (24 features, 24-16-4 forward)
 USE_NN_FIGHT = False        # the fight head in weights.FIGHT_HEAD picks the enemy to attack (decide.choose_fight_target)
 FIGHT_FUEL = 300_000        # fuel the fight head needs in hand (up to FIGHT_HEAD_MAX enemies)
 FIGHT_HEAD_MAX = 6
