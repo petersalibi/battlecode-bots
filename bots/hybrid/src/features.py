@@ -102,7 +102,7 @@ def build(w, turn, decider, rescore=True):
         x[t + 4] = clip(max(en.gems for en in w.enemies))
     else:
         x[t + 1] = 255
-    balance = w.power_balance()
+    balance = w.power_balance_raw()
     x[t + 3] = clip(128 * min(balance, 1.99)) if balance < 99 else 255
     x[t + 5] = clip(4 * (w.round - w.last_enemy_round))
     if w.last_enemy_pos is not None:

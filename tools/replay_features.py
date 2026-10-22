@@ -361,6 +361,8 @@ class OfflineWorld:
     def power_balance(self):
         return 99.0 if self.enemy_power <= 0 else self.ally_power / self.enemy_power
 
+    power_balance_raw = power_balance      # the selector's feature (strength only)
+
     def team_gems_banked(self):
         return self.banked[self.team]
 

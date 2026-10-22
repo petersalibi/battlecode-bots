@@ -96,7 +96,7 @@ class Group:
 
 
 class Enemy:
-    __slots__ = ("champion", "handle", "pos", "hp", "max_hp", "strength", "gems", "dist")
+    __slots__ = ("champion", "handle", "pos", "hp", "max_hp", "strength", "gems", "dist", "dmg")
 
     def __init__(self, champion, my_pos):
         self.champion = champion
@@ -105,6 +105,12 @@ class Enemy:
         self.hp = champion.health()
         self.max_hp = champion.max_health()
         self.strength = champion.strength()
+        self.dmg = self.strength                 # damage a turn with abilities counted (set below)
+        if config.FOCUS_POWER_WEIGHT:
+            try:
+                self.dmg = self.strength + config.FOCUS_POWER_WEIGHT * champion.focus()
+            except Exception:
+                pass
         self.dist = my_pos.chebyshev_distance(self.pos)
         try:
             self.gems = champion.gem_count()
@@ -464,6 +470,7 @@ class World:
             self._refresh_allies()
         else:
             self.ally_power = self.hp * self.strength
+            self.ally_power_eff = self.hp * self.my_dmg()
         if profiling:
             marks.append(_fuel())
         self._refresh_camps()
@@ -486,8 +493,10 @@ class World:
                 continue
         self.nearest_enemy = None
         self.enemy_power = 0.0
+        self.enemy_power_eff = 0.0
         for enemy in self.enemies:
             self.enemy_power += enemy.hp * enemy.strength
+            self.enemy_power_eff += enemy.hp * enemy.dmg
             if self.nearest_enemy is None or enemy.dist < self.nearest_enemy.dist:
                 self.nearest_enemy = enemy
             self.enemy_memory[enemy.handle] = (enemy.pos, self.round, enemy.hp / enemy.max_hp if enemy.max_hp else 0.0)
@@ -504,9 +513,13 @@ class World:
                 self.enemies_killed.append(self.round)
                 del self.enemy_memory[handle]
 
+    def my_dmg(self):
+        return self.strength + config.FOCUS_POWER_WEIGHT * self.focus
+
     def _refresh_allies(self):
         self.allies = []
         self.ally_power = self.hp * self.strength
+        self.ally_power_eff = self.hp * self.my_dmg()
         for champion in vision.champions(Team.ALLY):
             if int(champion) == self.handle:
                 continue
@@ -519,6 +532,13 @@ class World:
             self.allies.append((pos, hp, strength, pos.chebyshev_distance(self.pos)))
             if pos.chebyshev_distance(self.pos) <= config.FIGHT_RANGE:
                 self.ally_power += hp * strength
+                dmg = strength
+                if config.FOCUS_POWER_WEIGHT:
+                    try:
+                        dmg = strength + config.FOCUS_POWER_WEIGHT * champion.focus()
+                    except Exception:
+                        pass
+                self.ally_power_eff += hp * dmg
 
     def _refresh_camps(self):
         # Visible camps: (camp, group index, position, health). vision.camps() rebuilds every camp
@@ -696,7 +716,17 @@ class World:
         return sum(1 for pos, hp, strength, d in self.allies if pos.chebyshev_distance(tile) <= distance)
 
     def power_balance(self):
-        """Our local power over theirs; large when no enemy is visible."""
+        """Our local power over theirs; large when no enemy is visible. Power = health x damage a
+        turn, abilities counted through focus (FOCUS_POWER_WEIGHT): the band's casters (Heart of
+        Ruin at 688 focus and 52 strength) were rated at a fraction of their damage."""
+        if not config.FOCUS_POWER_WEIGHT:
+            return self.power_balance_raw()
+        if self.enemy_power_eff <= 0:
+            return 99.0
+        return self.ally_power_eff / self.enemy_power_eff
+
+    def power_balance_raw(self):
+        """Strength-only balance: the selector's feature (it was trained on this)."""
         if self.enemy_power <= 0:
             return 99.0
         return self.ally_power / self.enemy_power

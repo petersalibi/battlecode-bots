@@ -225,6 +225,7 @@ ALERT_MIN_HEALTH = 0.6      # ... and at least this healthy
 EARLY_LEAVE = False         # (off: with the alert fixed 29-49 (-46) vs v14) two enemies within ALERT_SIGHT, weaker, no ally within EARLY_LEAVE_ALLY_RANGE: flee now (no stand)
 EARLY_LEAVE_ALLY_RANGE = 5
 EARLY_HOLD_MAX = 0          # (off: no measurable effect on the band; 10 when on) in the opening wait at most this long beside a camp for helpers (three-body clears took 46 turns, the band's 16)
+FOCUS_POWER_WEIGHT = 0.25   # power = health x (strength + this x focus) in fight rules (world.power_balance); 0 = strength only
 SPAWN_STRIKE = True         # a body held on our spawn hits enemies in reach (actions.recall)
 NO_RECALL_IN_CONTACT = True # no recall (and cancel one) with an enemy within RECALL_CONTACT_RANGE at RECALL_CONTACT_HEALTH+
 RECALL_CONTACT_RANGE = 5

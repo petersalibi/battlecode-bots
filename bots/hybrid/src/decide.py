@@ -417,7 +417,7 @@ class Decider:
             return False                                        # far enough to get away
         incoming = 0.0
         for e in near:
-            incoming += e.strength
+            incoming += e.dmg
         if incoming <= 0:
             return False
         home = w.spawn_field.get(w.pos)
