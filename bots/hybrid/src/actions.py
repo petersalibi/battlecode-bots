@@ -385,6 +385,15 @@ class Actions:
         self.status = memory_codec.STATUS_BUSY
         if w.at_spawn:
             self.shop()
+            if config.SPAWN_STRIKE and w.enemies:
+                # Held on our spawn (it heals, and enemies cannot step on it): band games had 13% of
+                # our contact turns here with an enemy within 3 and no attack at all. Hit what is in
+                # reach before anything else; the step away below then only applies when nothing is.
+                target = self.d.choose_fight_target(turn, w)
+                if target is not None and target.dist <= w.attack_range:
+                    self._cast_offensive(target.champion, target.pos, against_camp=False)
+                    self._attack_with_reset(target.champion, target.pos)
+                    return
             if w.enemies and config.SPAWN_GATE:
                 tile = w.spawn_tile_away([e.pos for e in w.enemies])
                 if tile is not None and not self.nav.blocked().is_set(tile):
