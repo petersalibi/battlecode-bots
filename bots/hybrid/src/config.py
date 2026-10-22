@@ -252,7 +252,7 @@ NO_RECALL_IN_CONTACT = True # no recall (and cancel one) with an enemy within RE
 RECALL_CONTACT_RANGE = 5
 RECALL_CONTACT_HEALTH = 0.5
 FIGHT_LIVE_FIELD = True     # fight steps path over terrain + standing camps, not every camp tile (navigation.live_field)
-PAIR_ROUNDS = 400           # the pair rules below apply in the opening only (decide._pair_rules)
+PAIR_ROUNDS = 2000          # the pair rules below apply this long (join all game: 45-33 (+53) vs v28 in the mirror; 400 = opening only)
 PAIR_JOIN = True            # an ally within PAIR_JOIN_RANGE has an enemy within 3 of it and one is near us: fight beside it ...
 PAIR_JOIN_RANGE = 6
 PAIR_MIN_HEALTH = 0.5       # ... when we are at least this healthy
