@@ -258,6 +258,34 @@ fights at full health). The targeted fix, backing off when hit while waiting for
 clears the shared camps. Both dropped. What remains is the ladder-only case of a camp fight with
 an enemy team arriving, which the outnumbered rule (v11) now covers once they are in sight.
 
+### 4a. Stalls (triaged and mostly fixed 2026-10-22 evening)
+
+The harness counted 700 to 1,400 ten-turn stalls per 78-game sweep. Classified on engine dumps
+(scratchpad `stalls/classify.py`: for each `stuck` log line, the body's true position against
+the target group's living camps, free neighbours, holes and allies), 465 stalls in the twelve
+worst games:
+
+| Share | Shape | Cause |
+|---|---|---|
+| 72% | Beside a dead camp of the target, the living one two or three tiles away, free tiles around | `_approach`'s fallback pathed over the static board, where every camp tile is a wall, so a living camp inside a cluster of dead ones (packs, gem fields, pilgrimage) was unreachable |
+| 16% | Ranged body at the three-tile ring, camp in range by distance but not attacked | Line of sight: the ring is Chebyshev, the camp sits behind a wall (corridors) |
+| 6% | Target group has no living camp | Stale state, walked to the ring of a cleared group |
+| 3% | No target, cannot move | Standing inside a captured seven-camp cluster (boss battle): every neighbour a camp tile, so every cached field reads unreachable, no altar "reachable", and the body blocks the respawn: 1,200 rounds |
+
+Fixes, all in: `LIVE_APPROACH` (the fallback paths over live terrain, dead camps walkable, to the
+ring of the living camps in sight, else next to the group's unseen tiles: a neighbour is never out
+of sight); `OFF_WALL_RADIUS` (a body whose tile and neighbours are all unreachable walks over live
+terrain to the nearest tile its field reaches); `SEAL_ROUNDS` plus sealing only on an engine
+refusal (a hole sealed from inside a ring of holes on big world trapped a body for 1,000 rounds:
+the dash was "failing" because no landing improved the route, not because the engine refused).
+
+Mirror vs v33 (`replays/batch/liveapproach3-v33`): 39-39, gems per 100 rounds 49.6 against 48.3,
+deaths 828 against 900, stalls 158 against about 900 on v33's side (ours were 736 before).
+Three sweeps of this work read 38-40, 40-38 and 39-39 with deaths 30 to 90 lower each time.
+Corridors, packs and gem fields each went 2-0. What remains (48 stalls in the six worst games):
+the dash-cooldown wait at holes on islands and shortcut (item 4 below) and a few stale cleared
+groups on contest.
+
 ### 4. Routing at holes (looked at 2026-10-21; still open)
 
 Hole sealing after three failed crossings with the dash ready fires a few times a game but the

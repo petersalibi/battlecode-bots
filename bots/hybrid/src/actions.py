@@ -131,29 +131,38 @@ class Actions:
             self.nav.try_dash(field)
             return True
         here = field.get(w.pos)
-        if here > 1 and here != W.UNREACHABLE:
-            return self.nav.try_dash(field)
-        # On the static ring, or cut off from it, with nothing in range: some of the group's camps are
-        # dead, so path to the ones still standing (a dynamic field, computed only in this case).
-        alive = [pos for camp, gi, pos, hp in w.visible_camps if gi == g.index and hp > 0]
-        if not alive:
+        if here > 1 and here != W.UNREACHABLE and self.nav.try_dash(field):
+            return True
+        if not config.LIVE_APPROACH:
             return False
+        # On the static ring, cut off from it, or walled in: the cached field treats every camp
+        # tile as a wall, but dead camps are walkable and the living ones can sit inside a cluster
+        # of dead ones (packs, gem fields: 72% of all ten-turn stalls) or three tiles away behind
+        # a wall, out of sight (corridors, ranged bodies: 16%). Path over live terrain (terrain
+        # plus the camps standing now) to the ring around the living camps in sight, or, with none
+        # in sight, next to the group's tiles we cannot see yet: a neighbour is never out of sight.
+        alive = [pos for camp, gi, pos, hp in w.visible_camps if gi == g.index and hp > 0]
+        if alive:
+            centres, r = alive, radius
+        else:
+            centres = [tile for tile in g.tile_list if not w.visible.is_set(tile)]
+            r = 1
+            if not centres:
+                return False                        # every tile in sight and nothing alive: cleared
         goals = Bitboard()
         tmp = Bitboard()
-        for pos in alive:
+        for pos in centres:
             tmp.clear()
-            tmp.draw_chebyshev(pos, radius)
+            tmp.draw_chebyshev(pos, r)
             goals |= tmp
-        goals &= ~w.static_blocked
-        for pos in alive:
-            goals.set(pos, False)
+        goals &= ~(w.terrain_blocked | cambc.vision.camp_tiles())
         if goals.is_empty():
             return False
-        origin = Bitboard()
-        origin.set(w.pos)
-        dyn = cambc.DistanceField()
-        dyn.compute_to(w.static_blocked, goals, origin, Bitboard())
-        return self.nav.step_along(dyn)
+        dyn = self.nav.live_field(goals, config.LIVE_APPROACH_RANGE)
+        if self.nav.step_along(dyn):
+            self.trace += " live-approach"
+            return True
+        return False
 
     def approach_field(self, g, radius):
         """Cached field whose goals are the walkable tiles within radius of the group, minus its spawn tiles."""

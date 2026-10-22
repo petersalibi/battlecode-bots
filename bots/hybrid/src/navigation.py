@@ -16,6 +16,8 @@ DistanceField = cambc.DistanceField
 
 class Navigator:
     hole_failures = 0
+    dash_refused = False       # try_dash: the engine refused every landing it tried this call
+    sealed = []                # (tile, round) holes sealed by seal_holes, restored after SEAL_ROUNDS
 
     def __init__(self, world):
         self.w = world
@@ -27,6 +29,17 @@ class Navigator:
     def turn_reset(self):
         self._blocked = None
         self._from_me = None
+        if self.sealed and self.w.round - self.sealed[0][1] >= config.SEAL_ROUNDS:
+            # A seal is a guess that the hole cannot be crossed; kept for the whole game it trapped
+            # a body inside a ring of holes on big world for 1,000 rounds (the exit was sealed from
+            # the inside). Old seals come off and the routes are rebuilt.
+            w = self.w
+            while self.sealed and w.round - self.sealed[0][1] >= config.SEAL_ROUNDS:
+                tile, _r = self.sealed.pop(0)
+                w.thin_holes.set(tile, True)
+                w.static_blocked.set(tile, False)
+            self.fields.clear()
+            w.spawn_field_stale = True
 
     # ---- boards --------------------------------------------------------------------
     def blocked(self):
@@ -122,7 +135,25 @@ class Navigator:
                 value = field.get(tile)
                 if value < best_value:
                     best, best_value = tile, value
-            return best is not None and self._move(best)
+            if best is not None:
+                return self._move(best)
+            # Every neighbour is a camp tile too (boss battle: a body that captured a seven-camp
+            # group stood inside it for 1,200 rounds, blocking the respawn, with no target and no
+            # altar it could "reach"): walk over live terrain to the nearest tile the field reaches.
+            goals = Bitboard()
+            for tile in blocked.reachable_tiles(w.pos, config.OFF_WALL_RADIUS).positions():
+                if field.get(tile) != W.UNREACHABLE:
+                    goals.set(tile)
+            if goals.is_empty():
+                return False
+            dyn = self.live_field(goals, 2 * config.OFF_WALL_RADIUS)
+            if dyn.get(w.pos) == W.UNREACHABLE:
+                return False
+            for delta in dyn.next_moves_from(w.pos):
+                dest = w.pos + delta
+                if not blocked.is_set(dest) and self._move(dest):
+                    return True
+            return False
         # Optimal steps first: one engine call plus a membership test each.
         through_hole = False
         for delta in field.next_moves_from(w.pos):
@@ -144,11 +175,14 @@ class Navigator:
                         return True
                 return True
             if self.dash_ready():
-                self.hole_failures += 1
-                if self.hole_failures >= config.HOLE_FAIL_LIMIT:
-                    self.hole_failures = 0
-                    self.seal_holes(field)
-                    return False
+                # A failure is the engine refusing the landing, not a turn with no landing that
+                # improves the route (a crowded far side, or a route turning along the hole).
+                if self.dash_refused:
+                    self.hole_failures += 1
+                    if self.hole_failures >= config.HOLE_FAIL_LIMIT:
+                        self.hole_failures = 0
+                        self.seal_holes(field)
+                        return False
             else:
                 w.waiting_dash = True                 # the stall guard leaves a body waiting on its dash alone
         # Every optimal step is occupied: take any reachable tile that still improves, or failing
@@ -224,6 +258,7 @@ class Navigator:
             if w.thin_holes.is_set(dest):
                 w.thin_holes.set(dest, False)
                 w.static_blocked.set(dest, True)
+                self.sealed.append((dest, w.round))
                 sealed += 1
         if sealed:
             self.fields.clear()
@@ -236,6 +271,7 @@ class Navigator:
         gains 1, so 2 is the default; the hole crossing asks for 1 because the alternative is
         standing still)."""
         w = self.w
+        self.dash_refused = False
         if not w.can_cast or w.cast_exclusive:
             return False
         if min_gain >= 2 and config.DASH_SAVE_STEPS and w.has_dash and not w.thin_holes.is_empty()                 and self.hole_ahead(field, config.DASH_SAVE_STEPS):
@@ -271,7 +307,9 @@ class Navigator:
                             w.in_bush = w.bushes.is_set(tile)
                             blocked.set(tile, True)
                             return True
+                        self.dash_refused = True
                     except Exception:
+                        self.dash_refused = True
                         continue
             except Exception:
                 return False

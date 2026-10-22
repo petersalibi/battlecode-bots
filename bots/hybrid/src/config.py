@@ -146,8 +146,13 @@ FIELD_BUILD_RESERVE = 1_000_000 # fuel that must remain after building an option
 THIN_HOLES_COST = 150_000       # bitboard shifts that find the holes a dash can cross (~130K at 80x80)
 DASH_SAVE_STEPS = 6         # no speed-up dash when the route crosses a thin hole within this many steps (the dash is needed there)
 HOLE_FAIL_LIMIT = 3         # failed hole crossings with the dash ready before the hole is treated as a wall
+SEAL_ROUNDS = 150           # ... and for this long only (a seal made from inside a ring of holes trapped a body all game)
 DASH_ROUTES = True              # champions with a dash route across thin holes (fields treat them as passable)
 DASH_SQUARE_LANDINGS = True     # dash landings from the ability's range square (crosses holes) instead of walked tiles
+LIVE_APPROACH = True        # a body at its camp's static ring with nothing in reach paths over live terrain (dead camps
+                            # walkable) to the living camps, or next to the unseen tiles (actions._approach) ...
+LIVE_APPROACH_RANGE = 20    # ... with a local field explored this far
+OFF_WALL_RADIUS = 4         # a body deep inside a cleared cluster looks this far for a tile its route reaches (navigation.step_along)
 STUCK_TURNS = 10            # turns without a move or an action before a body drops its target ...
 STUCK_AVOID_ROUNDS = 20     # ... and leaves that group alone for this long (usually it is just crowded)
 FIRST_TURN_QUIET = 150_000   # below this after setup, the first turn logs nothing and ends at once
