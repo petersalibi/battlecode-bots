@@ -486,6 +486,21 @@ class Actions:
         if altar is None or w.gems <= 0:
             return self.farm(turn)
         altar_pos, turns = altar
+        lock = w.visible_locks.get((altar_pos.x, altar_pos.y))
+        if lock is not None and w.can_attack and w.pos.chebyshev_distance(altar_pos) <= w.attack_range:
+            # An enemy lock on the altar: five basic attacks break it (a tribute against it would
+            # be refused). Hit it, then step closer if we are not yet in tribute range.
+            try:
+                w.me.attack(lock)
+                w.can_attack = False
+                self.acted = True
+                self.trace += " lock"
+            except Exception:
+                pass
+            if w.pos.chebyshev_distance(altar_pos) > w.submit_range:
+                key = ("altar", altar_pos.x, altar_pos.y)
+                self.nav.step_along(self.nav.field_to(key, self.nav.ring(key, [altar_pos], w.submit_range)))
+            return
         if w.pos.chebyshev_distance(altar_pos) <= w.submit_range:
             try:
                 w.me.submit_gems(altar_pos)

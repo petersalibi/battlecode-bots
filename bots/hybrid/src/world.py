@@ -200,6 +200,9 @@ class World:
         self.last_enemy_pos = None
         self.enemies_killed = []       # rounds at which an enemy was seen to die
         self.distant_enemies = []      # in sight but unreachable and out of reach (config.THREAT_DETOUR)
+        self.altar_locks = {}          # (x, y) -> round last seen, for enemy locks on altars; cleared when the altar
+                                       # is seen bare (a lock lasts until broken, so out of sight it is still there)
+        self.visible_locks = {}        # (x, y) -> AltarLock snapshot this turn
         self._threat_walk = None       # that test's walking field, reused while we stand still
         self._threat_walk_at = None
         self._threat_walk_round = -99
@@ -590,6 +593,7 @@ class World:
         profiling = config.PROFILE_EVERY > 0
         marks = [_fuel()] if profiling else None
         self.visible = vision.visible_tiles()
+        self._refresh_altar_locks()
         self._refresh_enemies()
         if profiling:
             marks.append(_fuel())
@@ -611,6 +615,21 @@ class World:
         if profiling:
             marks.append(_fuel())
             self.refresh_profile = [marks[i] - marks[i + 1] for i in range(len(marks) - 1)]
+
+    def _refresh_altar_locks(self):
+        self.visible_locks = {}
+        try:
+            for lock in vision.altar_locks(Team.ENEMY):
+                p = lock.position()
+                self.visible_locks[(p.x, p.y)] = lock
+        except Exception:
+            pass
+        for altar in self.altars:
+            key = (altar.x, altar.y)
+            if key in self.visible_locks:
+                self.altar_locks[key] = self.round
+            elif key in self.altar_locks and self.visible.is_set(altar):
+                del self.altar_locks[key]            # seen bare: broken since
 
     def _refresh_enemies(self):
         had_enemy = self.last_enemy_round == self.round - 1

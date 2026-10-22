@@ -143,15 +143,11 @@ class Turn:
 
     # ---- altars --------------------------------------------------------------------
     def altar(self):
-        """(altar position, walking turns) for the nearest altar without an enemy lock, or None."""
+        """(altar position, walking turns) for the nearest altar, a remembered enemy lock counting
+        ALTAR_LOCK_PENALTY extra turns (the body breaks it on arrival: actions.tribute), or None."""
         if self._altar is None:
             w = self.w
-            locked = set()
-            try:
-                for lock in vision.altar_locks(Team.ENEMY):
-                    locked.add((lock.position().x, lock.position().y))
-            except Exception:
-                pass
+            locked = set(w.altar_locks)
             best = None
             if not locked and w.turns_to_altar == W.UNREACHABLE:
                 pass                                          # no altar can be walked to from here
@@ -167,8 +163,6 @@ class Turn:
                 field_cost = config.FIELD_COST_PER_TILE * w.width * w.height
                 built = False
                 for altar in w.altars:
-                    if (altar.x, altar.y) in locked:
-                        continue
                     key = ("altar", altar.x, altar.y)
                     field = self.nav.fields.get(key)
                     if field is None:
@@ -179,6 +173,8 @@ class Turn:
                         field = self.nav.field_to(key, self.nav.ring(key, [altar], w.submit_range))
                         built = True
                     turns = field.get(w.pos)
+                    if turns != W.UNREACHABLE and (altar.x, altar.y) in locked:
+                        turns += config.ALTAR_LOCK_PENALTY
                     if turns < best_turns:
                         best, best_turns = (altar, turns), turns
             self._altar = best if best is not None else False

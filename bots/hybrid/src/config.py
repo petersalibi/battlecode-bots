@@ -28,6 +28,10 @@ CAMP_FLEE_AVOID_ROUNDS = 40 # and that group is left alone for this long
 # Week 2 patch: a wolf pays 4 gems, an elk 15, a gem cluster 7, and a kill pays 100 gold, so
 # bags are small and carriers are hunted. Bank often.
 TRIBUTE_BAG = 24            # bank once carrying this many gems
+ALTAR_LOCK_PENALTY = 8      # walking turns a remembered enemy altar lock adds to that altar in the choice [5-15]: five hits
+                            # break it (rules), so a locked altar nearby still beats a far one. Locks are remembered once
+                            # seen (reverse spiral, ranked: a lock seen only within 8 tiles flipped the choice every step,
+                            # Ryth paced two tiles for 600 rounds with 35 gems)
 TRIBUTE_BAG_NEAR = 8        # ... or this many when an altar is close
 TRIBUTE_NEAR_TURNS = 5      # "close" means within this many walking turns
 TRIBUTE_BAG_HURT = 6        # bank anything above this when health is low

@@ -366,14 +366,29 @@ adjacent at the start and 245 hit it. A melee body at 30-45% with a melee chaser
   deaths 1047 vs 1189**, exhaustions 39 (baseline), stalls 234 with the new counters (corridors
   70, fracture 26, great wall 19). Reverse spiral 1015-387 both sides (was 0-0), yellow brick
   road 1-1. The log line now carries `src=` (the decision source) for contact_modes.py.
+- **Submitted as v36 (851576c, 2026-10-22 17:45 UTC).** Band, paired with v34/v35 on the same
+  70 games: **26 wins** (v35 17, v34 11), gathered 757 (v35 577), banked by r300 / r600 / r1000
+  48.6 / 135.5 / 283.7 (v35 48.6 / 125.1 / 253.3), deaths 19.3 (20.3), dead 19.6% of turns.
+- The real reverse-spiral loop (Tyler's correction: Ryth from r713, Marcella from r925, both at
+  the top edge with 35 gems in tribute mode, and back into it after every flee): the opponent
+  put an altar lock on the (2,2) altar at r376 (one of ours hit it four of the five times
+  needed). `vision.altar_locks` only shows a lock within 8 tiles, so at x=10 the altar came into
+  sight locked, the choice flipped to the far altar, one step east it was out of sight and
+  unlocked again. Fix (after v36): locks are remembered once seen until the altar is seen bare
+  (`w.altar_locks`), a locked altar costs `ALTAR_LOCK_PENALTY` turns in the choice instead of
+  vanishing at the sight line, and a body at a locked altar attacks the lock (`actions.tribute`,
+  five hits) instead of leaving. Lesson for every rule: anything that keys off vision-limited
+  state at the sight boundary can oscillate; remember it or add hysteresis.
 - Open: boss battle is scoreless (a body with 1,230 gems and no reachable altar idles 1,000
   rounds); the blind-contest give-up repeats every 60 rounds per body (`CAPTURE_STANDOFF_AVOID`
-  is per body, not shared).
+  is per body, not shared); we never place altar locks ourselves (10 gold, cancels an enemy
+  tribute, costs them five attacks).
 
-### Where we are (v35, e8dd755, live 2026-10-22 15:20 UTC)
+### Where we are (v36, 851576c, live 2026-10-22 17:45 UTC)
 
 - Band wins on the same 70 games: v14 6, v26 12, v28 15, v31 16, v33 14, v34 11 (engine 1.0.3
-  from here), v35 17. Deaths per game are flat at 19 to 20; gathering is the lever that moved.
+  from here), v35 17, v36 26. Deaths per game 19 to 20 throughout; gathering is the lever that
+  moved (485 -> 577 -> 757 a game).
 - Ladder: v34 64% over 50 games, rank 179 / 1,663. 1,750 still needs about 60% against the
   opponents that come with it.
 - Open, in order: the parameter tuning pass (every new constant carries its [range]; harness
