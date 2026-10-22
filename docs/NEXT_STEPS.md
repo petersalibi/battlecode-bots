@@ -282,7 +282,16 @@ the dash was "failing" because no landing improved the route, not because the en
 Mirror vs v33 (`replays/batch/liveapproach3-v33`): 39-39, gems per 100 rounds 49.6 against 48.3,
 deaths 828 against 900, stalls 158 against about 900 on v33's side (ours were 736 before).
 Three sweeps of this work read 38-40, 40-38 and 39-39 with deaths 30 to 90 lower each time.
-Corridors, packs and gem fields each went 2-0. What remains (48 stalls in the six worst games):
+Corridors, packs and gem fields each went 2-0. On engine 1.0.3 (local cambc 3.0.5, 80 games
+with road of riches): 45-35, gems per 100 rounds 51.8 against 48.3, deaths 848 against 951,
+stalls 152 (`replays/batch/v34-v33-engine103`). Road of riches exhausts six first-turn bodies
+a game on both sides: a big-map setup cost, not new.
+
+**Submitted as v34 (f766a99, 2026-10-22 13:35 UTC).** Band replay (`data/challenges/v34-band200`):
+11 wins against v33's 14 on the same 70 game slots, gathered 485 (best), banked by r300 44
+(best), by r1000 217 (v33 238), deaths 20.4 (v33 19.1). Not a paired reading: engine 1.0.3
+went live between the two runs, 17 games flipped (10 against, 7 for), and no patch notes were
+published. Judge v34 on the ladder, or pay two submissions for a paired band run. What remains (48 stalls in the six worst games):
 the dash-cooldown wait at holes on islands and shortcut (item 4 below) and a few stale cleared
 groups on contest.
 
