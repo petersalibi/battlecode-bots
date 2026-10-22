@@ -48,6 +48,8 @@ class Decider:
         self.camp_source = "script"   # who ranked the camps at the last retarget
         self.gated_since = -1         # round the spawn gate started holding this body, or -1
         self.helping_group = None     # the group whose call for help this body answered
+        self.chase_handle = None      # the weak enemy this body is running down, and until when
+        self.chase_until = -1
         self.regroup_pos = None       # opening: the ally tile this body is stepping towards, and until when
         self.regroup_until = -1
         self.enemy_seen_round = -100  # last round an enemy was in sight (the first sighting starts a regroup)
@@ -261,6 +263,9 @@ class Decider:
         pair = self._pair_rules(w)
         if pair is not None:
             return pair
+        chase = self._chase_rule(w)
+        if chase is not None:
+            return chase
         # Spawn camping (elk arena on the ladder: 79 deaths, most within 8 turns of our spawn at
         # full health, three enemies in sight): the spawn heals and enemies cannot enter it, so a
         # body that would walk out into a stronger group stays until it has left or allies are up.
@@ -367,6 +372,40 @@ class Decider:
             self.gated_since = -1
             return FIGHT if w.enemy_within(config.FIGHT_RANGE) else None
         return RECALL
+
+    def _chase_rule(self, w):
+        """Band games: their bodies retreated 86 times a game and took 7 damage a turn doing it
+        (3% died); ours took 26 a turn (17.5% died). They chase and we do not: they kill 22 of
+        ours a game, we kill 9. A weak enemy close by is worth running down: the kill pays 100
+        gold and its gems. Committed for CHASE_TURNS while it stays in sight and in reach."""
+        self.chase_handle = None if w.round > self.chase_until else self.chase_handle
+        if not config.CHASE or not w.enemies or w.at_spawn or w.hp_ratio < config.CHASE_MIN_HEALTH:
+            return None
+        weak = None
+        for e in w.enemies:
+            if e.dist <= config.CHASE_RANGE and e.hp <= config.CHASE_HP * e.max_hp:
+                if self.chase_handle is not None and e.handle == self.chase_handle:
+                    weak = e
+                    break
+                if weak is None or e.hp < weak.hp:
+                    weak = e
+        if weak is None:
+            self.chase_handle = None
+            return None
+        others = 0
+        for e in w.enemies:
+            if e is not weak and e.dist <= config.FIGHT_RANGE and e.hp > config.CHASE_HP * e.max_hp:
+                others += 1
+        allies = 0
+        for pos, hp, strength, d in w.allies:
+            if d <= config.FIGHT_RANGE:
+                allies += 1
+        if others > allies:
+            return None                                       # their fresh bodies outnumber ours here
+        if weak.handle != self.chase_handle:
+            self.chase_handle = weak.handle
+            self.chase_until = w.round + config.CHASE_TURNS
+        return self._set_mode(FIGHT, "chase")
 
     def _pair_rules(self, w):
         """Opening (band games: after an enemy first came into sight, our bodies died 11% of the time
@@ -645,6 +684,11 @@ class Decider:
         the visible enemies when it is on, affordable and sure."""
         best, best_key = None, None
         targets = list(turn.fight_targets())
+        if self.chase_handle is not None:
+            for enemy in targets:
+                if enemy.handle == self.chase_handle:
+                    self.fight_source = "chase"
+                    return enemy
         for enemy in targets:
             in_range = enemy.dist <= w.attack_range
             key = (1 if in_range else 0, -(enemy.hp / max(enemy.max_hp, 1)), enemy.gems, -enemy.dist)

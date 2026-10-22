@@ -238,7 +238,12 @@ CHAMPION_KIT = {   # name: (STR, FOCUS, SHIELD)
 }
 # Band games, 129K contact samples: kills matched deaths only at a kit-power balance of about 2
 # (1.0-1.2: we lost two bodies per kill). The rules' balance is scaled by this so 1.0 means even.
-POWER_CALIBRATION = 0.5   # 0.5 matches the band data (tested as v26); 1.0 = uncalibrated
+CHASE = True                # run down a weak enemy close by (decide._chase_rule) ...
+CHASE_RANGE = 4
+CHASE_HP = 0.35             # ... at or below this share of its health ...
+CHASE_MIN_HEALTH = 0.5      # ... when we have this much ...
+CHASE_TURNS = 6             # ... and keep after it this long
+POWER_CALIBRATION = 0.5     # band (70 paired games): v26 at 0.5 won 12, deaths 21.6; v25 at 1.0 won 9, deaths 24.8
 NN_BALANCE_SCALE = 1.0      # scale of the strength-only balance the selector sees (its training scale is 1.0)
 FOCUS_POWER_WEIGHT = 0.25   # power = health x (strength + this x focus) in fight rules (world.power_balance); 0 = strength only
 SPAWN_STRIKE = True         # a body held on our spawn hits enemies in reach (actions.recall)
