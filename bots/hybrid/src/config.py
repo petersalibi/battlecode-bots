@@ -13,8 +13,8 @@ N_MODES = 6
 MODE_STICKINESS = 0.15
 
 # ---- Health thresholds (ratios of max health) --------------------------------
-FLEE_HEALTH = 0.30          # flee is forced below this when an enemy is visible
-RECALL_HEALTH = 0.50        # recall to heal below this when no enemy is near (a death costs 60 rounds,
+FLEE_HEALTH = 0.45          # flee is forced below this when an enemy is visible (0.30 before v30; band: our retreats started at 67% health and 17.5% died, the band's at 86% and 3%)
+RECALL_HEALTH = 0.60        # recall to heal below this when no enemy is near (a death costs 60 rounds,
                             # the bag and 100 gold to the killer; a recall costs about 15 turns)
 FIGHT_MIN_HEALTH = 0.55     # never start a fight below this
 CAMP_MIN_HEALTH = 0.45      # never start a new camp below this
