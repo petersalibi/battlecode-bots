@@ -57,7 +57,7 @@ BOSS_MIN_GEMS = 150         # ... when it is worth at least this many gems (gole
 BOSS_MAX_TRIPS = 4          # ... in at most this many trips, each costing the walk home and back plus
 BOSS_TRIP_OVERHEAD = 12     # ... this many turns (recall and healing)
 BOSS_FACTOR = 0.6           # score multiplier for such a plan
-CAPTURE_PARTY = True        # a capturer with an enemy on its region posts the group in byte 6; allies join it
+CAPTURE_PARTY = False       # (off: working, after the byte-6 fix, it lost 32-46 (-78) vs v15; on 47-31 off) a capturer with an enemy on its region posts the group in byte 6; allies join it
 CAPTURE_PARTY_FRESH = 6     # rounds a party call counts
 CAPTURE_SUPPORT_TRAVEL = 12 # allies within this many walking turns join (the standoff doubles once one arrives)
 MAX_CAMP_CANDIDATES = 12
@@ -215,7 +215,7 @@ FLEE_STRIKE_BACK = True     # a melee body that stepped away still hits a chaser
 # their 8%; 165 early deaths, most a lone farmer that saw one enemy, kept farming while three or
 # four gathered, and died fleeing after 10+ rounds of warning).
 EARLY_ROUNDS = 400
-EARLY_ALERT = True          # a body with an enemy in sight posts its group in byte 6 (bot.py); idle allies come (decide) ...
+EARLY_ALERT = False         # (off: v18 band, no fewer early deaths and 9 fewer gems banked by r300) a body with an enemy in sight posts its group in byte 6 (bot.py); idle allies come (decide) ...
 ALERT_SIGHT = 8             # ... enemies this close count ...
 ALERT_NEAR = 8              # ... posted only when we are this close to the group ...
 ALERT_FRESH = 4             # ... answered while this fresh (rounds) ...
@@ -223,7 +223,7 @@ ALERT_TRAVEL = 12           # ... by allies within this many tiles of the group 
 ALERT_MIN_HEALTH = 0.6      # ... and at least this healthy
 EARLY_LEAVE = False         # (off: with the alert fixed 29-49 (-46) vs v14) two enemies within ALERT_SIGHT, weaker, no ally within EARLY_LEAVE_ALLY_RANGE: flee now (no stand)
 EARLY_LEAVE_ALLY_RANGE = 5
-EARLY_HOLD_MAX = 10         # in the opening wait at most this long beside a camp for helpers (three-body clears took 46 turns, the band's 16)
+EARLY_HOLD_MAX = 0          # (off: no measurable effect on the band; 10 when on) in the opening wait at most this long beside a camp for helpers (three-body clears took 46 turns, the band's 16)
 WARD_OFTEN = True           # a ward whenever the charge is back (actions.ward_often) ...
 WARD_OFTEN_EVERY = 20       # ... at most every this many rounds ...
 WARD_OFTEN_SPACING = 5      # ... and this many tiles from our last ward, never on our spawn
