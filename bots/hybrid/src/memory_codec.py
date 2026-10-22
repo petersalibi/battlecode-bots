@@ -4,7 +4,7 @@ Shared memory (8 bytes, read/write all match):
     bytes 0-5   one claim byte per ally body, indexed by the body's position in cambc.champions(ALLY)
                 bits 7-6: status (STATUS_*), bits 5-0: claimed camp group index + 1 (0 = none)
     byte 6      contested group: bits 5-0 the group index + 1 an enemy was last seen near (0 = none),
-                bits 7-6 the epoch (round // 32 mod 4) it was seen, so readers know how stale it is
+                bits 7-6 the epoch (round // 4 mod 4) it was seen, so readers know how stale it is
     A claim of STATUS_IDLE with a group is a call for help: the body is holding at a camp it
     cannot clear alone, waiting for allies (actions.farm); helpers score that group up.
     byte 7      break-out signal: bit 7 set, bits 6-0 the round (mod 128) a gated body decided the
@@ -44,7 +44,9 @@ def write_claim(slot, status, group_index):
         cambc.shared_memory[slot] = encode_claim(status, group_index)
 
 
-CONTEST_EPOCH = 32
+CONTEST_EPOCH = 4      # rounds per step of the 2-bit age: a call reads as at most 3 rounds old in its own step
+                       # (it was 32: a call posted this round read as up to 31 rounds old, so the alert and the
+                       # party capture, answered only while 4-6 rounds fresh, were almost never answered)
 
 
 def write_contested(group_index, round_number):
