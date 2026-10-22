@@ -62,6 +62,17 @@ class Navigator:
         field.compute(self.w.static_blocked & ~goals, goals, Bitboard(), max_distance)
         return field
 
+    def live_field(self, goals, max_distance):
+        """Like local_field, but over terrain plus the camps standing now instead of every camp
+        tile: fights happen beside cleared camps and on capture regions, where the static walls
+        left a body one blocked step from its target, or inside a wall with no way out (probe:
+        80 stalled fight steps in four 500-round games)."""
+        walls = self.w.terrain_blocked | vision.camp_tiles()
+        walls.set(self.w.pos, False)
+        field = DistanceField()
+        field.compute(walls & ~goals, goals, Bitboard(), max_distance)
+        return field
+
     def from_me(self, max_distance=None):
         """Field of walking turns from our current tile, recomputed at most once per turn (~64K fuel)."""
         if self._from_me is None or self._from_me_round != self.w.round:

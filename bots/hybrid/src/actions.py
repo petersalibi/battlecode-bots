@@ -427,7 +427,10 @@ class Actions:
             goals.set(target.pos, False)
         else:
             goals.set(target.pos)
-        field = self.nav.local_field(goals, config.FIGHT_RANGE * 2 + 2)
+        if config.FIGHT_LIVE_FIELD:
+            field = self.nav.live_field(goals, config.FIGHT_RANGE * 2 + 2)
+        else:
+            field = self.nav.local_field(goals, config.FIGHT_RANGE * 2 + 2)
         self.nav.step_along(field)
         self.nav.try_dash(field)
         if w.pos.chebyshev_distance(target.pos) <= w.attack_range:
