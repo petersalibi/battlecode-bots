@@ -4,7 +4,100 @@ Written 2026-10-21, after submission 7. Deadline early November 2026. Team work 
 shared blocks, escorts) is deliberately last: everything here improves one body's own decisions,
 in the order they sit behind the main decision, the mode selector.
 
-## Where we are
+## Update 2026-10-22: v12 to v33 (read this first)
+
+The sections below this one were written for v7 to v11. Since then the work moved from the
+mirror to **unranked challenges against the +200 band**: 14 teams rated +170 to +230 above us,
+`tools/challenges.py --band LOW,HIGH`. Games are deterministic, so `--replay-from
+data/challenges/v14-band200 --limit 14` replays the same 70 (team, map, side) games for every
+version, which makes before/after runs exact pairs. Challenges always play the live submission,
+so submit first and wait for the run to finish before submitting again. Quota is 50 groups per
+rolling hour. The full analysis is in the "Band Gap Analysis" Claude doc
+(https://claude.ai/artifact/8UR65wjhKK3UgifhLuSmTc).
+
+**Lesson: the mirror misleads on fight judgment.** Calibration 0.5 lost 34-44 in the mirror and
+doubled band wins. Use the mirror only to catch regressions and exhaustions. Judge anything about
+enemy behaviour on the band.
+
+### Where we are (v33, c9cc289, live)
+
+- Band wins on the same 70 games: v14 6, v26 12, v28 15, v31 16, v33 14. That's a plateau at
+  14 to 16 over v28 to v33.
+- Ladder since v28: 32-33, deaths 11.9 a game against our opponents' 18.9, rating about 1,631,
+  rank about 207 (1,512 and rank 370 at v11). 1,750 needs about 60% against opponents near our
+  rating.
+
+### What worked (kept, in order of gain)
+
+| Version | Change (config switch) | Evidence |
+|---|---|---|
+| v13 | Builds copied from top-25 winners' purchase orders (`BUILD_ORDER`), turn priority (`TURN_PRIORITY`) | 57-21 vs v12, deaths -30%. Biggest single gain of the project |
+| v12 | Party captures, remembered camp damage, deferred retargets, leaner first turn | 45-33 vs v11 |
+| v14 | Stand and fight when fleeing would cost the duel anyway (`STAND_GROUND`, 50% health floor), melee strikes back while fleeing (`FLEE_STRIKE_BACK`) | 52-26 vs v13 |
+| v15 | Ward whenever the charge is back (`WARD_OFTEN`) | Band 5 to 8 wins, banked by r1000 142 to 188 |
+| v18 | Byte-6 call age fix (`memory_codec.CONTEST_EPOCH = 4`, was 32: calls read as up to 31 rounds old) | Bug fix |
+| v20 | Opening: fight beside an ally within 6 that has an enemy within 3 (`PAIR_JOIN`) | Band 7 to 10 |
+| v21 | Fight steps path over live terrain, not every camp tile as a wall (`FIGHT_LIVE_FIELD`) | Idle in contact 28% to 26% |
+| v22 to v23 | No shopping recall in contact (`NO_RECALL_IN_CONTACT`), bodies held on spawn hit enemies in reach (`SPAWN_STRIKE`), first turn ends quietly under 150K fuel (`FIRST_TURN_QUIET`) | Idle in contact 17% (band 16%), round-1 exhaustions gone |
+| v25 to v26 | Per-champion power from the kits (`CHAMPION_POWER`, `CHAMPION_KIT`) plus calibration (`POWER_CALIBRATION 0.5`) | Band 7 to 12 |
+| v28 | Cast spells already in reach before stepping (`CAST_BEFORE_STEP`) | Band 15 |
+| v30 | Forced flee below 45% health (was 30%), recall below 60% (was 50%) | Fewest deaths (18.7) |
+| v31 | Capture a group we just cleared right away (`CAPTURE_OWN_CLEAR`) | Band 16 (best) |
+| v33 | Mode selector retrained on the band's own games (`data/band/*.npz`) | Band 14, best early banking. Kept live |
+
+**How the kit power works.** Every ability slot has an 8-turn cooldown and a champion casts
+once a turn. A spell dealing k times focus therefore adds k/8 focus per turn, an attack reset
+adds 1/8 strength, Varg's splash adds 1/4, and shields count as extra health. Per champion:
+damage per turn = strength × S + focus × F, effective health = hp + focus × shield (table in
+`config.CHAMPION_KIT`). Checked on 129K band contact samples (scratchpad `weak/calib.py`), kit
+power separates won and lost exchanges better than strength alone (AUC 0.860 against 0.828).
+Kills only match deaths at an estimated balance of about 2, hence calibration 0.5. The selector
+still sees the raw strength-only balance (`power_balance_raw`), because that's what it was
+trained on.
+
+### What failed (switched off or reverted; don't retry without a new reason)
+
+| Idea | Switch | Result |
+|---|---|---|
+| Early camp pairs as a score nudge | `EARLY_PAIRS` (on only with the elk bonus) | Lost alone. Real pairing needs coordinated movement, not a score bonus |
+| Opening alert: call allies to a sighting | `EARLY_ALERT` | No fewer early deaths (2.35 vs 2.41), banked by r300 fell 36.7 to 27.5 |
+| Leave the camp early when an enemy is sighted | `EARLY_LEAVE` | 29-49 vs v14 |
+| Short holds | `EARLY_HOLD_MAX 0` | Nothing over v15 |
+| Party captures (working version) | `CAPTURE_PARTY` | 32-46 vs v15 |
+| Regroup with allies | `REGROUP` | 35-43 |
+| Multi-trip boss plan | `BOSS_TRIPS` | Lost. Winners chip bosses from r800 with itemised champions |
+| Flat focus weight 0.25 | `FOCUS_POWER_WEIGHT` (superseded by kits) | Band 8 |
+| Chase fleeing enemies | `CHASE` (on, kept with v28) | Band 10 on its own |
+| Calibration 0.4 | | 30-48 |
+| Danger weight 0.5 | | 26-52 |
+| Casting while capturing | | 34-44 |
+| Flee at 55% health | | 35-43 |
+| Stand down to 20% health | `STAND_FUTILE_MIN_HEALTH` | 32-46 |
+| Gold worth 0.2 of a gem | `GOLD_VALUE` (v32, back to 0.1) | Banked by r300 24 against 35 |
+| Selector trained on band rows only, or outcome-weighted (beta) | | Worse than base plus band rows |
+
+### What is still open, and why it needs a design discussion
+
+1. **Damage traded in contact: 0.5 for us against the band's 2.3.** Damage per hit is equal.
+   37% of our contact time is fleeing, and fleeing bodies attack 1.6% of the time. The band's
+   retreats take 7 damage a turn and 3% die. Ours take 26 a turn and 17.5% die. Every
+   single-body rule tried (stand, chase, flee earlier or later) either didn't move it or added
+   deaths. The band fights as a group and picks its moment. One body can't decide that alone.
+2. **Gathering: 464 gems against 936.** The band earns about twice our gems from the same five
+   champions and dies half as often, so the draft isn't the gap. Gems per camp hit are 0.85
+   against 1.14. Steals are stuck at 16%, and two thirds of them are contested camps the band
+   finishes after driving us off.
+3. **Contested-middle maps.** We're 0/7 on corridors (all 12 groups on the centre line: 107
+   gems against 1,034, while dying less), and weak on packs, eight and starfish.
+
+**Proposed next step: a team-level planner.** The whole team, or fixed pairs, shares one target,
+moves as a unit, and decides together when to fight and when to leave. Shared memory is the limit
+(the claims board plus byte 6). The likely shape is a leader body that writes the plan and
+followers that read it. This touches `decide.py`, `actions.py` and `memory_codec.py`, so agree on
+the design with Tyler before building it.
+
+## Where we were at v7 (2026-10-21)
+
 
 - **v7 on the ladder** (tag `hybrid-v7`): scripted bot, mode selector network trained on 62
   ranked games of the top 15 teams, dash-aware routing with a dash-first draft on hole-walled
@@ -201,7 +294,7 @@ plus or minus four wins; none of these cleared it.
 
 ## Process
 
-- Evaluate against both v5 and v6 (`python tools/run_matches.py hybrid hybrid@hybrid-v6`).
+- Mirror first (`python tools/run_matches.py hybrid hybrid@hybrid-v33`) to catch regressions and `exh`, then submit and replay the 70 band games (`python tools/challenges.py --replay-from data/challenges/v14-band200 --limit 14`) to judge. Band wins decide fight and behaviour changes, not the mirror.
 - After each submission, fetch our own ranked games into `data/replays/ours-vN/` and run
   `tools/ladder_deaths.py`; compare with the previous version's window before judging.
 - Any `exh` in the harness is a bug until shown otherwise.
