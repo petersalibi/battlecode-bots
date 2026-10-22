@@ -38,9 +38,9 @@ class Bot:
                 return
             # The plan (22 map features, picks) only in the group log: formatting it on the first
             # turn cost the last 50K of a budget that big maps already spend to within 100K.
-            print("init: %s slot %d/%d groups=%d map=%dx%d dps=%d budget=%d init_fuel=%d profile=%s%s" % (
+            print("init: %s slot %d/%d groups=%d map=%dx%d dps=%d budget=%d init_fuel=%d profile=%s squad=%s mid=%d%%%s" % (
                 w.kind_name, w.slot, w.n_bodies, len(w.groups), w.width, w.height, int(w.dps),
-                start_fuel, start_fuel - fuel.remaining(), w.init_profile,
+                start_fuel, start_fuel - fuel.remaining(), w.init_profile, w.squad, int(100 * w.middle_share),
                 (" plan=%s" % (w.plan,)) if config.LOG_GROUPS else ""), flush=True)
             if fuel.remaining() < config.FIRST_TURN_MIN + config.FIRST_TURN_PER_TILE * w.width * w.height:
                 # A huge map: acting now would suspend the turn into the next round. Standing still
@@ -146,9 +146,10 @@ class Bot:
             self.last_logged_mode = mode
             target = self.d.target_group.index if self.d.target_group is not None else -1
             avg = self.fuel_total // self.turns if self.turns else 0
-            print("r%d %s: %s hp=%d%% gems=%d gold=%d target=%d enemies=%d fuel_used=%d avg=%d max=%d retarget=%d/%s [%s]" % (
+            print("r%d %s: %s hp=%d%% gems=%d gold=%d target=%d enemies=%d fuel_used=%d avg=%d max=%d retarget=%d/%s [%s]%s" % (
                 w.round, w.kind_name, config.MODE_NAMES[mode], int(w.hp_ratio * 100), w.gems, w.gold, target,
-                len(w.enemies), used, avg, self.fuel_max, self.d.retarget_peak, self.d.camp_source, self.worst), flush=True)
+                len(w.enemies), used, avg, self.fuel_max, self.d.retarget_peak, self.d.camp_source, self.worst,
+                (" squad=%s" % (self.d.squad_stats,)) if config.SQUAD_LOG and w.round % config.LOG_EVERY == 0 else ""), flush=True)
         if not w.near_ready:
             # Leftover fuel builds the group anchors and vision masks, a few groups per turn, after
             # the turn's actions are safely done (a suspended turn loses its actions).

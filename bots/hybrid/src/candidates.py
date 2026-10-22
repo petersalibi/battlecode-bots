@@ -15,9 +15,9 @@ Team = cambc.Team
 
 
 class CampCandidate:
-    __slots__ = ("group", "travel", "clear_turns", "damage", "wait", "claimed", "score", "bodies", "helping")
+    __slots__ = ("group", "travel", "clear_turns", "damage", "wait", "claimed", "score", "bodies", "helping", "squad_bodies")
 
-    def __init__(self, group, travel, clear_turns, damage, wait, claimed):
+    def __init__(self, group, travel, clear_turns, damage, wait, claimed, squad_bodies=1):
         self.group = group
         self.travel = travel
         self.clear_turns = clear_turns
@@ -25,7 +25,8 @@ class CampCandidate:
         self.wait = wait
         self.claimed = claimed
         self.score = 0.0
-        self.bodies = 1 + claimed     # champions the plan assumes on the group, set by the scorer
+        self.squad_bodies = squad_bodies   # bodies the squad brings (the leader plans for its squad)
+        self.bodies = max(1 + claimed, squad_bodies)   # champions the plan assumes on the group, set by the scorer
         self.helping = False          # set by the scorer when this is an answer to an ally's call
 
 
@@ -70,6 +71,8 @@ class Turn:
             if slot != w.slot and group_index >= 0 and status in (memory_codec.STATUS_FARM, memory_codec.STATUS_CAPTURE, memory_codec.STATUS_IDLE):
                 claimed_groups[group_index] = claimed_groups.get(group_index, 0) + 1
         reach = w.attack_range
+        # The squad leader plans for its squad: the clear is shared, so is the monsters' attention.
+        squad_n = 1 + w.squad_available if config.SQUADS and w.is_leader else 1
         recent_reward = round_number - 30
         latest_ok = round_number + config.MAX_CAMP_TURNS + config.RESPAWN_WAIT_TURNS
         # Pass one: one field read per group, keep the nearest few. Pass two does the arithmetic.
@@ -97,9 +100,10 @@ class Turn:
                 wait = 0
             claimed = claimed_groups.get(g.index, 0)
             # Allies already on the group share the work and the monsters' attention.
-            clear_turns = int(g.health_left / (w.dps * (1 + claimed))) + 1
-            damage = g.total_strength * clear_turns / (1 + claimed)
-            out.append(CampCandidate(g, travel, clear_turns, damage, wait, claimed))
+            bodies = max(1 + claimed, squad_n)
+            clear_turns = int(g.health_left / (w.dps * bodies)) + 1
+            damage = g.total_strength * clear_turns / bodies
+            out.append(CampCandidate(g, travel, clear_turns, damage, wait, claimed, squad_n))
             if len(out) >= config.MAX_CAMP_CANDIDATES:
                 break
         return out

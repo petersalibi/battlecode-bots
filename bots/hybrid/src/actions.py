@@ -33,6 +33,7 @@ class Actions:
         self.trace = ""
         self.acted = False          # attacked or cast this turn
         self.waiting = False        # standing still on purpose (capturing, holding for allies)
+        self.squad_gave_up = False  # farm: the squad give-up retarget ran this turn (at most once)
         handler = (self.farm, self.capture, self.tribute, self.recall, self.fight, self.flee)[mode]
         handler(turn)
 
@@ -191,12 +192,35 @@ class Actions:
                 self._attack_with_reset(enemy.champion, enemy.pos)
             self.trace = "regroup"
             return
+        if config.SQUADS and not w.is_leader and w.leader_claim is not None \
+                and w.leader_claim[0] == memory_codec.STATUS_CAPTURE and 0 <= w.leader_claim[1] < len(w.groups):
+            # The leader is capturing: wait beside the region (hitting anything in reach) rather than
+            # walk off to a camp of our own; the leader's next claim takes the squad on together.
+            cg = w.groups[w.leader_claim[1]]
+            if cg.anchor is not None and w.pos.chebyshev_distance(cg.anchor) <= 2 * config.HELP_WAIT_RANGE \
+                    and d.capture_wait < config.SQUAD_CAPTURE_WAIT:
+                d.capture_wait += 1
+                d.squad_stats["capture_wait"] = d.squad_stats.get("capture_wait", 0) + 1
+                enemy = w.nearest_enemy
+                if enemy is not None and enemy.dist <= w.attack_range:
+                    self._attack_with_reset(enemy.champion, enemy.pos)
+                self.waiting = True
+                self.trace = "capture-wait"
+                return
+        else:
+            d.capture_wait = 0
         g = d.target_group
         engaged = g is not None and bool(self._camps_in_range(g.index))
         # Stale when the group was cleared or captured since we chose it (a group chosen while
         # respawning stays valid), or periodically while we are still walking.
         stale = g is None or (g.state != d.target_state and g.state in (W.REWARD, W.RESPAWNING)) or (
             not engaged and w.round - d.target_round >= config.RETARGET_EVERY)
+        if config.SQUADS and not stale and not engaged and not w.is_leader and w.leader_claim is not None:
+            # The leader moved on to another group since our last retarget: re-rank once now.
+            status, group = w.leader_claim
+            if status in (memory_codec.STATUS_FARM, memory_codec.STATUS_IDLE) and group != d.leader_group_seen \
+                    and (g is None or g.index != group):
+                stale = True
         if stale and g is not None and d.retarget_peak and fuel.remaining() < d.retarget_peak + config.RETARGET_DEFER_MARGIN:
             # Not enough fuel left this turn for a re-rank as costly as the worst one so far
             # (the selector and the re-rank together ran big-world turns out of fuel): keep the
@@ -254,7 +278,24 @@ class Actions:
         w.want_allies = d.target_bodies > 1
         if targets and w.want_allies and w.damage_taken <= 0:
             present = 1 + w.allies_near(g.tile_list[0], config.HELP_WAIT_RANGE)
-            if present < d.target_bodies:
+            needed = d.target_bodies
+            if config.SQUADS and len(w.squad) > 1:
+                # The squad plan: wait for the mates that can come. With none available (dead,
+                # recalling, banking) a soloable camp is farmed now and a bigger one given up.
+                needed = min(needed, 1 + w.squad_available)
+                if w.soloable(g):
+                    needed = min(needed, 1 + config.SQUAD_WAIT_FOR)   # one mate beside us is the pair we want
+                if needed <= 1 and not w.soloable(g) and not self.squad_gave_up:
+                    # Once per turn, with the candidate list rebuilt so the avoided group is out of
+                    # it (recursing on the cached list ran turns out of fuel in the first sweep).
+                    self.squad_gave_up = True
+                    g.avoid_until = w.round + config.HOLD_AVOID_ROUNDS
+                    d.target_group = None
+                    d.camp_cache = None
+                    d.hold_since = -1
+                    turn._camps = None
+                    return self.farm(turn)
+            if present < needed:
                 if d.hold_since < 0:
                     d.hold_since = w.round
                 elif (w.round - d.hold_since > config.HOLD_MAX_TURNS and not (config.COOP and w.ally_claims(g.index)))                         or (config.EARLY_HOLD_MAX and w.round <= config.EARLY_ROUNDS and w.round - d.hold_since > config.EARLY_HOLD_MAX):
@@ -271,6 +312,7 @@ class Actions:
                 if config.COOP:
                     self.status = memory_codec.STATUS_IDLE          # the call for help on the claims board
                 self.trace += " holding %d/%d" % (present, d.target_bodies)
+                d.squad_stats["hold_turns"] = d.squad_stats.get("hold_turns", 0) + 1
                 self.waiting = True
                 return
         d.hold_since = -1
@@ -282,6 +324,11 @@ class Actions:
                 self._cast_shield()
             return
 
+        if config.SQUADS and d.squad_hold_round == w.round:
+            # The leader is retreating from this group and nothing is in sight yet: stand here.
+            self.waiting = True
+            self.trace += " squad-hold"
+            return
         # Walk in. Melee stands next to a camp tile. Ranged stops at attack range, except at harmless
         # camps, where standing adjacent means the capture starts the turn the last camp dies.
         # Never stand on the spawn tiles themselves: an occupied spawn tile delays the respawn.
@@ -419,6 +466,8 @@ class Actions:
         if target is None:
             return self.farm(turn)
         self.status = memory_codec.STATUS_FARM
+        if config.SQUADS and self.d.target_group is not None:
+            self.claim_group = self.d.target_group.index           # the squad's plan survives the fight
         in_range = target.dist <= w.attack_range
         if in_range:
             self._cast_offensive(target.champion, target.pos, against_camp=False)
@@ -484,6 +533,8 @@ class Actions:
             self.nav.step_along(w.spawn_field)
             return
         threats = [e.pos for e in w.enemies]
+        if config.SQUADS and self.d.target_group is not None:
+            self.claim_group = self.d.target_group.index           # BUSY + group: the squad's retreat signal
         # A stun on the closest pursuer buys a turn.
         nearest = w.nearest_enemy
         for rec in w.abilities:

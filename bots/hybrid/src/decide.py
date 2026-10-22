@@ -11,6 +11,7 @@ import fight_features
 import datalog
 import features
 import fuel
+import memory_codec
 import nn
 import weights
 import weights_adv
@@ -60,6 +61,12 @@ class Decider:
         self.escape_source = "script" # who chose the last flee step
         self.fight_source = "script"  # who chose the last fight target
         self.breakout_round = -1      # round this body joined a break-out
+        self.leader_group_seen = -1   # squads: the leader's group at our last retarget (a change retargets once)
+        self.squad_fled_round = -10   # squads: last round the leader's retreat pulled us off a group
+        self.squad_hold_round = -1    # squads: round a follower stands still instead of walking into a retreat
+        self.squad_stats = {}         # squads: counts of follow outcomes and hold turns (the periodic log line)
+        self.capture_wait = 0         # squads: turns a follower has waited beside its leader's capture
+        self.squad_logged = -1        # squads: the leader's group we last logged following
 
     def record_death(self, round_number):
         """Called on the first dead turn: remember where we were going (camp_features reads it)."""
@@ -238,6 +245,9 @@ class Decider:
             balance = w.power_balance()
             if balance < config.FLEE_POWER_RATIO or (self.mode == FLEE and balance < config.OUTNUMBERED_STAY_BALANCE):
                 return self._set_mode(FLEE, "rule")
+        squad = self._squad_rule(w)
+        if squad is not None:
+            return squad
         if config.EARLY_LEAVE and w.round <= config.EARLY_ROUNDS and not w.at_spawn and w.enemies:
             # Opening: two enemies near and nobody of ours within reach is how most early deaths
             # began (3-4 enemies by the end, 10+ rounds of warning). Leave now, not when hurt.
@@ -364,7 +374,7 @@ class Decider:
         if self.gated_since < 0:
             self.gated_since = w.round
         try:
-            age = memory_codec.breakout_age(w.round)
+            age = memory_codec.breakout_age(w.round) if config.BREAKOUT_SIGNAL else None
         except Exception:
             age = None
         if age is not None and age <= 1 and self.breakout_round != w.round:
@@ -374,13 +384,42 @@ class Decider:
         balance = w.spawn_power_balance()
         if balance >= config.SPAWN_BREAK_RATIO or w.round - self.gated_since >= config.SPAWN_GATE_MAX_TURNS:
             try:
-                memory_codec.write_breakout(w.round)
+                if config.BREAKOUT_SIGNAL:
+                    memory_codec.write_breakout(w.round)
             except Exception:
                 pass
             self.breakout_round = w.round
             self.gated_since = -1
             return FIGHT if w.enemy_within(config.FIGHT_RANGE) else None
         return RECALL
+
+    def _squad_rule(self, w):
+        """A follower whose leader has been retreating from the squad's group for
+        SQUAD_RETREAT_ROUNDS rounds running (its claim: BUSY with that group) retreats too: the
+        band's retreats are whole-group retreats and take 7 damage a turn; ours were one body at
+        a time and took 26. Flee while enemies are in sight; with none in sight stand instead of
+        walking into them (actions.farm). The target is kept: the leader's claim brings the squad
+        back together when it returns."""
+        if not config.SQUADS or w.is_leader or w.at_spawn or w.leader_busy_rounds < config.SQUAD_RETREAT_ROUNDS:
+            return None
+        group = w.leader_busy_group
+        if not 0 <= group < len(w.groups):
+            return None
+        g = w.groups[group]
+        if g.anchor is None:
+            return None
+        mine = (self.target_group is not None and self.target_group.index == group) or (
+            self.capture_group is not None and self.capture_group.index == group)
+        if not mine and w.pos.chebyshev_distance(g.anchor) > 2 * config.HELP_WAIT_RANGE:
+            return None
+        if config.SQUAD_LOG and self.squad_fled_round != w.round - 1:
+            print("r%d %s: squad retreat from g%d (leader slot %d), enemies=%d" % (
+                w.round, w.kind_name, group, w.leader, len(w.enemies)), flush=True)
+        self.squad_fled_round = w.round
+        if w.enemies:
+            return self._set_mode(FLEE, "squad-flee")
+        self.squad_hold_round = w.round
+        return None
 
     def _chase_rule(self, w):
         """Band games: their bodies retreated 86 times a game and took 7 damage a turn doing it
@@ -494,7 +533,7 @@ class Decider:
     def score_camp(self, cand, w):
         """Reward per turn invested, discounted by the damage we expect to take."""
         g = cand.group
-        bodies = 1 + cand.claimed
+        bodies = max(1 + cand.claimed, cand.squad_bodies)
         turns = cand.travel + cand.wait + cand.clear_turns + config.CAPTURE_TURNS
         if turns <= 0:
             turns = 1
@@ -509,6 +548,10 @@ class Decider:
                 # Too much for the bodies on it now. Plan on more allies joining, if that would work:
                 # with m bodies the clear is m times faster and the monsters' attention is shared.
                 max_bodies = min(w.n_bodies, config.MAX_HELPERS + 1)
+                if config.SQUADS and len(w.squad) > 1:
+                    # Only the squad answers a hold (help calls stay inside the squad), so a plan
+                    # can count on the mates that are free now and nobody else.
+                    max_bodies = min(max_bodies, 1 + w.squad_available)
                 m, damage_m, clear_m = bodies, cand.damage, cand.clear_turns
                 while damage_m >= budget and m < max_bodies:
                     m += 1
@@ -580,7 +623,9 @@ class Decider:
             score *= config.EARLY_PAIR_BONUS
             if config.ELK_BONUS != 1.0 and 1 in g.kinds:
                 score *= config.ELK_BONUS
-        if cand.claimed and not needs_help and not paired and not (config.COOP and w.help_called(g.index)):
+        if config.SQUADS and cand.claimed and w.squad_claims(g.index):
+            score *= config.SQUAD_JOIN_BONUS                          # a squad mate is there: the squad stays together
+        elif cand.claimed and not needs_help and not paired and not (config.COOP and w.help_called(g.index)):
             score *= config.CLAIMED_PENALTY                           # do not stack on an easy camp
         if self.target_group is not None and g.index == self.target_group.index:
             score *= 1.15                                             # finish what we started
@@ -625,6 +670,38 @@ class Decider:
             self.helping_group = best.group.index
             if config.LOG_HELP:
                 print("r%d %s: answering the call at g%d (travel %d)" % (w.round, w.kind_name, best.group.index, best.travel), flush=True)
+        if config.SQUADS and not w.is_leader and w.leader_claim is not None:
+            # A follower goes where its leader is going (hard follow: score nudges towards allies
+            # were tried three times and lost; moving as a unit was not). The leader's group must
+            # be a live candidate within SQUAD_FOLLOW_TRAVEL, else we farm on our own until it is.
+            status, group = w.leader_claim
+            self.leader_group_seen = group if status in (memory_codec.STATUS_FARM, memory_codec.STATUS_IDLE) else -1
+            stats = self.squad_stats
+            if self.leader_group_seen < 0:
+                key = "leader_capture" if status == memory_codec.STATUS_CAPTURE else "leader_busy" if group >= 0 else "leader_none"
+                stats[key] = stats.get(key, 0) + 1
+            else:
+                kept = next((c for c in cands if c.group.index == group and c.score > 0.0
+                             and c.travel <= config.SQUAD_FOLLOW_TRAVEL), None)
+                if kept is None:
+                    raw = next((c for c in cands if c.group.index == group), None)
+                    if raw is None:
+                        lg = w.groups[group] if 0 <= group < len(w.groups) else None
+                        key = ("nc_none" if lg is None else "nc_reward" if lg.state == 2 else "nc_respawn" if lg.state == 3
+                               else "nc_unreachable" if not lg.reachable or lg.anchor is None else "nc_far")
+                    else:
+                        key = "score_zero" if raw.score <= 0.0 else "too_far"
+                    stats[key] = stats.get(key, 0) + 1
+                else:
+                    stats["followed"] = stats.get("followed", 0) + 1
+                if kept is not None:
+                    kept.bodies = max(kept.bodies, 1 + w.squad_available)
+                    best = kept
+                    self.camp_source = "squad"
+                    if config.SQUAD_LOG and self.squad_logged != group:
+                        self.squad_logged = group
+                        print("r%d %s: following slot %d to g%d (travel %d, squad %d)" % (
+                            w.round, w.kind_name, w.leader, group, kept.travel, 1 + w.squad_available), flush=True)
         allowed = [cand.score > config.MIN_CAMP_SCORE for cand in cands]
         if self.net_target is not None:
             kept = next((cand for index, cand in enumerate(cands) if allowed[index] and cand.group.index == self.net_target), None)

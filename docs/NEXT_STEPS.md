@@ -97,6 +97,71 @@ moves as a unit, and decides together when to fight and when to leave. Shared me
 followers that read it. This touches `decide.py`, `actions.py` and `memory_codec.py`, so agree on
 the design with Tyler before building it.
 
+### Squads: built 2026-10-22, in the code behind `SQUADS` (off)
+
+What was built (design agreed with Tyler: pairs by default, whole team on contested-middle maps,
+hard follow, no new memory layout):
+
+- **Engine fact first**: allies out of our own 8-tile vision are opaque. `cambc.champions(ALLY)`
+  lists them, but `position()`, `health()`, `strength()`, `gem_count()` and `state()` all raise
+  "Unit is not in vision"; only `is_alive()` works team-wide. So a plan can only be expressed in
+  camp groups through the claims board, never in positions.
+- **Squads by slot** (`world._init_squads`): `SQUAD_SIZE` 2, the remainder joins the last squad
+  (5 bodies: 2 + 3); everybody in one squad when `SQUAD_ALL_MIDDLE` (80%) of the groups are about
+  as far from each spawn centre (corridors, reverse spiral, rushbait: 100%; starfish 75%, lost
+  world 70%, hooks 50%). Every body computes the same split, so nothing is shared. The
+  centre-line count must wait for `finish_init`'s leftover fuel: on the first turn it ran
+  islands, boss battle, shortcut and yellow brick road out of fuel.
+- **The leader's claim byte is the plan**: leader = lowest slot in the squad alive and not
+  BUSY-with-no-group (`world._refresh_squad`, one `is_alive()` per mate per turn). FARM/IDLE + G:
+  go to G (IDLE = holding for the rest). CAPTURE + G: wait beside it (`SQUAD_CAPTURE_WAIT`).
+  BUSY + G (`actions.flee` writes it): retreating from G; followers retreat once it has lasted
+  `SQUAD_RETREAT_ROUNDS` (2) rounds, flee with enemies in sight, stand without. `actions.fight`
+  keeps the claim so the plan survives a fight. Help calls (IDLE holds) count only inside the
+  squad.
+- **Leader plans for its squad**: candidates' clear time and damage use the squad's available
+  bodies (`candidates`), `score_camp` caps the helper plan at the squad (`max_bodies`), a group a
+  squad mate claims scores ×`SQUAD_JOIN_BONUS` instead of ×`CLAIMED_PENALTY`.
+- **Hard follow** (`decide.choose_camp`): a follower takes the leader's group when it is a live
+  candidate within `SQUAD_FOLLOW_TRAVEL` (25) turns; a leader change triggers one extra retarget;
+  the rally is the existing hold-for-help (`actions.farm`), which ends once `SQUAD_WAIT_FOR` (1)
+  mate is beside the camp. Follow outcomes and hold turns are counted in `d.squad_stats` and
+  printed on the r100/r200... log lines with `SQUAD_LOG`.
+
+What happened (mirror vs v33, 78 games each; `replays/batch/squads-v33b..e`):
+
+| Sweep | Change | Result |
+|---|---|---|
+| a | as designed | 29-49, recursion bug in the squad give-up (fuel 5,701 exhausted turns) |
+| b | bug fixed, helper plan capped at the squad | 36-42, gems/100 42.6 vs 45.9, deaths 820 vs 927, 64 exh (all round 1, the centre-line loop) |
+| c | retreat only after 2 leader rounds, no target drop | 37-41, gems/100 42.0 vs 46.4, deaths 844 vs 845 |
+| d | capture wait, hold for one mate, leader's group exempt from the follower's avoid marks, centre count off the first turn | 32-46, gems/100 41.0 vs 46.7, deaths 832 vs 887, 23 exh, stalls 1,370 (the exemption sends followers back into crowded camps) |
+| e | exemption reverted | 28-50, gems/100 39.4 vs 51.3, deaths 879 vs 852 |
+
+Why it costs gems: measured on dumps (true positions), squad mates were within 4 tiles 35% of
+the time at first and 47-54% after the fixes; followers went solo at 40% of their retargets at
+first (leader capturing, leader's group respawning or out of the follower's list, pair split by
+a recall or a death on a big map: on expanse the pair was more than 25 tiles apart 19% of the
+time) and still at 15-25%; a follower waits beside captures 4-13% of its turns and holds at camps
+up to 11%. Two bodies on one camp halve the map coverage, and in the mirror that is a straight
+gem loss while the safety gain only shows as fewer deaths. The per-map results swing by ±1,500
+gems between sweeps (contest +2,000 then +200, hooks -1,826 then +1,672), so single games are
+coin flips and the 28 to 37 wins are one reading: level to behind.
+
+Not band-tested (Tyler's call: one submission plus 14 groups). The mirror has misled on fight
+judgment before (calibration 0.5 lost 34-44 in the mirror and doubled band wins), but this loss
+is on gathering, not fights, and the band gathers twice our gems with only slightly more grouping
+than we had (ally within 4: 52% against our 43%), so a hard pair is more grouping than they do.
+If it is revisited: a loose pair (the follower picks its own camp near the leader's, joins only
+when the leader holds or an enemy is posted) keeps the coverage; the capture wait and the
+one-mate hold are the parts that measurably helped togetherness.
+
+**Also fixed on the way**: `decide.py` never imported `memory_codec`, so the v8 break-out signal
+(byte 7) raised inside its try/except on both the write and the read and never fired. Now
+imported, behind `BREAKOUT_SIGNAL`, off: alone it went 35-43 vs v33 with deaths 915 against 866
+(`replays/batch/breakout-v33`), so the gated bodies leaving together is not an improvement as
+the gate stands. With both switches off the code plays exactly as v33.
+
 ## Where we were at v7 (2026-10-21)
 
 

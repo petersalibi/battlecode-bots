@@ -181,6 +181,15 @@ class World:
         self.prev_hp = None
         self.enemy_memory = {}         # handle -> (pos, round, hp_ratio)
         self._spawn_centers = None
+        self.squad = [0]               # slots in our squad (config.SQUADS; _init_squads)
+        self.leader = 0                # the squad's leader this turn: its lowest slot alive and not busy
+        self.is_leader = True
+        self.leader_claim = None       # (status, group) the leader claims: the squad's plan
+        self.squad_available = 0       # squad mates alive and not busy (dead, recalling, banking)
+        self.squad_claim_groups = set()   # groups squad mates claim (farm, hold, capture)
+        self.leader_busy_group = -1    # the group the leader has been retreating from, and for how many rounds running
+        self.leader_busy_rounds = 0
+        self.middle_share = 0.0        # share of the camp groups on the centre line (_init_squads)
         self.contested = None          # byte 6: (group index, rounds old) an enemy was last seen at
         self.help_calls = set()
         self.claim_counts = {}
@@ -287,6 +296,8 @@ class World:
             if int(champion) == self.handle:
                 self.slot = index
                 break
+        self.ally_champions = list(allies)
+        self._init_squads()
 
         self.kind = int(me.champion_name())
         self.kind_name = config.CHAMPION_NAMES[self.kind] if 0 <= self.kind < len(config.CHAMPION_NAMES) else str(self.kind)
@@ -308,6 +319,77 @@ class World:
         marks.append(_cambc.fuel_remaining())
         self.init_profile = [marks[i] - marks[i + 1] for i in range(len(marks) - 1)]   # map, groups, boards, rest
         self.ready = True
+
+    def _init_squads(self):
+        """Fixed squads by slot (config.SQUADS): SQUAD_SIZE bodies each, the remainder joining the
+        last one (5 bodies: 2 + 3), or everybody in one squad when most camp groups sit on the
+        centre line (corridors: all twelve groups there, 0/7 against the band with each body
+        fighting the middle alone). Every body computes the same split, so nothing is shared.
+        The centre-line count waits for finish_init's leftover fuel (about 3K per group: on the
+        first turn it ran islands, boss battle and yellow brick road out of fuel)."""
+        self.squad = [self.slot]
+        self.middle_share = 0.0
+        self.middle_pending = config.SQUADS and self.n_bodies >= 2
+        if not config.SQUADS or self.n_bodies < 2:
+            return
+        n = self.n_bodies
+        size = max(1, config.SQUAD_SIZE)
+        start = (self.slot // size) * size
+        if start + 2 * size > n:
+            start = min(start, max(0, (n // size - 1) * size))
+            end = n
+        else:
+            end = start + size
+        self.squad = list(range(start, end))
+
+    def _middle_share(self):
+        """Share of the camp groups about as far from their spawn as from ours; with most of them
+        there the whole team plays as one squad."""
+        self.middle_pending = False
+        ours, theirs = self.spawn_centers()
+        middle = 0
+        for g in self.groups:
+            tile = g.tile_list[0]
+            if abs(tile.chebyshev_distance(ours) - tile.chebyshev_distance(theirs)) <= config.SQUAD_MIDDLE_TOLERANCE:
+                middle += 1
+        self.middle_share = middle / max(len(self.groups), 1)
+        if self.middle_share >= config.SQUAD_ALL_MIDDLE:
+            self.squad = list(range(self.n_bodies))
+
+    def _refresh_squad(self):
+        """Who leads the squad this turn (its lowest slot alive and not busy: a claim of BUSY with
+        no group is a dead, recalling or banking body) and what it claims, which is the squad's
+        plan: FARM or IDLE with a group = go there (IDLE = holding for the rest of us), CAPTURE
+        = capturing it, BUSY with a group = retreating from it."""
+        self.leader = self.slot
+        self.is_leader = True
+        self.leader_claim = None
+        self.squad_available = 0
+        if len(self.squad) < 2:
+            return
+        for slot in self.squad:
+            if slot == self.slot or slot >= len(self.claims):
+                continue
+            status, group = self.claims[slot]
+            if status == memory_codec.STATUS_BUSY and group < 0:
+                continue
+            try:
+                if not self.ally_champions[slot].is_alive():
+                    continue
+            except Exception:
+                continue
+            self.squad_available += 1
+            if slot < self.leader:
+                self.leader = slot
+                self.leader_claim = (status, group)
+        self.is_leader = self.leader == self.slot
+        claim = self.leader_claim
+        if claim is not None and claim[0] == memory_codec.STATUS_BUSY and claim[1] >= 0:
+            self.leader_busy_rounds = self.leader_busy_rounds + 1 if claim[1] == self.leader_busy_group else 1
+            self.leader_busy_group = claim[1]
+        else:
+            self.leader_busy_group = -1
+            self.leader_busy_rounds = 0
 
     def _estimate_dps(self):
         """Sustained damage per turn against a camp, basic attacks plus abilities over their cooldown."""
@@ -355,6 +437,10 @@ class World:
                     g.anchor = None
                     g.reachable = True
                 self.fields_changed = True
+        if self.middle_pending:
+            if _fuel() < config.FINISH_INIT_RESERVE + 4000 * len(self.groups):
+                return
+            self._middle_share()
         if self.altar_field is None:
             if _fuel() < config.FINISH_INIT_RESERVE + config.FIELD_COST_PER_TILE * self.width * self.height:
                 return
@@ -408,6 +494,11 @@ class World:
     def first_target(self, claims):
         """Cheap first-turn target: nearest reachable group from spawn that pays gems, that we could
         clear alone, and that no ally has claimed yet (claims are written as the round proceeds)."""
+        if config.SQUADS and not self.is_leader and self.leader_claim is not None:
+            # The leader (a lower slot, so it usually acted earlier this round) has claimed: go there.
+            status, group = self.leader_claim
+            if status != memory_codec.STATUS_BUSY and 0 <= group < len(self.groups) and self.groups[group].gems > 0:
+                return self.groups[group]
         taken = {group_index for slot, (status, group_index) in enumerate(claims)
                  if slot != self.slot and group_index >= 0}
         budget = self.max_hp * (1 - config.HEALTH_RESERVE)
@@ -510,6 +601,8 @@ class World:
         self.claims = memory_codec.read_claims()
         self.contested = memory_codec.read_contested(self.round)
         self._index_claims()
+        if config.SQUADS:
+            self._refresh_squad()
         if profiling:
             marks.append(_fuel())
             self.refresh_profile = [marks[i] - marks[i + 1] for i in range(len(marks) - 1)]
@@ -730,11 +823,18 @@ class World:
         each group (score_camp asks per candidate, so this must not loop over the board there)."""
         self.help_calls = set()
         self.claim_counts = {}
+        self.squad_claim_groups = set()
+        squads = config.SQUADS and len(self.squad) > 1
         for slot, (status, claimed) in enumerate(self.claims):
             if slot != self.slot and claimed >= 0:
+                if status == memory_codec.STATUS_BUSY:
+                    continue                          # retreating from the group: not on it
                 self.claim_counts[claimed] = self.claim_counts.get(claimed, 0) + 1
-                if status == memory_codec.STATUS_IDLE and not self.help_calls:
-                    self.help_calls.add(claimed)      # one live call per team: the lowest slot's
+                in_squad = slot in self.squad
+                if squads and in_squad:
+                    self.squad_claim_groups.add(claimed)
+                if status == memory_codec.STATUS_IDLE and not self.help_calls and (in_squad or not squads):
+                    self.help_calls.add(claimed)      # one live call per team: the lowest slot's (our squad's, with squads)
 
     def refresh_action_flags(self):
         """Re-read what we may do this turn (after cancelling a channel)."""
@@ -751,6 +851,16 @@ class World:
 
     def ally_claims(self, group_index):
         return self.claim_counts.get(group_index, 0)
+
+    def squad_claims(self, group_index):
+        return group_index in self.squad_claim_groups
+
+    def soloable(self, g):
+        """Could this body clear the group alone with HEALTH_RESERVE to spare?"""
+        if g.harmless:
+            return True
+        budget = max(self.hp - config.HEALTH_RESERVE * self.max_hp, 1.0)
+        return g.total_strength * (int(g.health_left / self.dps) + 1) < budget
 
     def allies_near(self, tile, distance):
         """Visible allies within distance of a tile (from the last ally scan)."""

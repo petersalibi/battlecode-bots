@@ -289,6 +289,20 @@ BUILD_ORDER = {
 }
 
 # ---- self-play (tools/selfplay_modes.py) -----------------------------------------------------
+SQUADS = False              # (off: mirror 28-50 to 37-41 vs v33 over five sweeps, gems per 100 rounds 39-42 vs 46-51; deaths level or lower) fixed squads by slot share one target and move as a unit (world._init_squads, decide, actions) ...
+SQUAD_SIZE = 2              # ... pairs; a remainder joins the last squad (5 bodies: 2 + 3) ...
+SQUAD_ALL_MIDDLE = 0.8      # ... the whole team is one squad when this share of the groups sits on the centre line ...
+SQUAD_MIDDLE_TOLERANCE = 3  # ... (a group's distances to the two spawn centres differ by at most this)
+SQUAD_FOLLOW_TRAVEL = 25    # a follower takes its leader's group when it is within this many walking turns
+SQUAD_JOIN_BONUS = 1.5      # the leader's score multiplier for a group a squad mate already claims (instead of CLAIMED_PENALTY)
+SQUAD_RETREAT_ROUNDS = 2    # a follower retreats once its leader has been retreating this many rounds running (one-turn
+                            # flee flips at balance 1 scattered whole squads in the first sweep)
+SQUAD_WAIT_FOR = 1          # a hold at a camp ends once this many squad mates are beside it (a triple waiting for its
+                            # third body idled 20% of its turns)
+SQUAD_CAPTURE_WAIT = 8      # a follower beside a group its leader is capturing waits this many turns instead of leaving
+SQUAD_LOG = True            # one line when a follower adopts a target or a squad retreat fires (cheap)
+BREAKOUT_SIGNAL = False     # (off: alone vs v33 35-43, deaths 915 vs 866) the spawn gate's break-out byte (v8): decide.py never
+                            # imported memory_codec, so the write and the read raised inside try/except and every gated body left on its own test
 MODE_EXPLORE = 0.0          # data runs only: probability the chosen mode is swapped for another legal one
 MODE_EXPLORE_SALT = 0       # varies per sweep so the same turn explores differently
 MODE_EXPLORE_HOLD = 3       # an explored mode is held this many turns (one-turn deviations have no measurable outcome)
