@@ -238,7 +238,7 @@ CHAMPION_KIT = {   # name: (STR, FOCUS, SHIELD)
 }
 # Band games, 129K contact samples: kills matched deaths only at a kit-power balance of about 2
 # (1.0-1.2: we lost two bodies per kill). The rules' balance is scaled by this so 1.0 means even.
-POWER_CALIBRATION = 1.0   # 0.5 matches the band data (tested as v26); 1.0 = uncalibrated
+POWER_CALIBRATION = 0.5   # 0.5 matches the band data (tested as v26); 1.0 = uncalibrated
 NN_BALANCE_SCALE = 1.0      # scale of the strength-only balance the selector sees (its training scale is 1.0)
 FOCUS_POWER_WEIGHT = 0.25   # power = health x (strength + this x focus) in fight rules (world.power_balance); 0 = strength only
 SPAWN_STRIKE = True         # a body held on our spawn hits enemies in reach (actions.recall)
