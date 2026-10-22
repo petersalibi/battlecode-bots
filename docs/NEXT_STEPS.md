@@ -320,8 +320,23 @@ search range in `config.py`.
 
 **Submitted as v35 (e8dd755, 2026-10-22 ~15:20 UTC).** Band replay queued to
 `data/challenges/v35-band200`, paired with v34's engine-1.0.3 run (same slots, same engine):
-the first reading of whether longer fights pay against real opponents (compare_runs' damage
-traded ratio and deaths, not only wins).
+paired with v34 (same engine), collected 15:39 UTC: **17 wins** (v34 11, v33 14, v31 16:
+the best band run so far), gathered 577 (v34 485), banked by r300 48.6 / r600 125 / r1000 253
+(v34 43.7 / 110 / 217), deaths 20.3 (v34 20.4). Contact turns (fightstats): attack rate 28% to
+30%, damage dealt 1,639K to 2,103K against taken 3,267K to 3,429K, so the traded ratio moved
+0.50 to 0.61; ranged attack rate in contact 38% to 41%. The ladder read at the same time: v34
+32-18 over its 50 ranked games (v33 on engine 1.0.3: 20-25), rank 179 at 1,663.
+
+### Where we are (v35, e8dd755, live 2026-10-22 15:20 UTC)
+
+- Band wins on the same 70 games: v14 6, v26 12, v28 15, v31 16, v33 14, v34 11 (engine 1.0.3
+  from here), v35 17. Deaths per game are flat at 19 to 20; gathering is the lever that moved.
+- Ladder: v34 64% over 50 games, rank 179 / 1,663. 1,750 still needs about 60% against the
+  opponents that come with it.
+- Open, in order: the parameter tuning pass (every new constant carries its [range]; harness
+  paired gem margin with successive halving, then band-threshold fits, then ladder arms chosen by
+  a hash of map, side and drafts), the dash-cooldown wait at holes (item 4), the damage traded
+  ratio (0.61 against the band's own, see tools/analysis/fightstats.py), wards.
 
 ### 4. Routing at holes (looked at 2026-10-21; still open)
 
