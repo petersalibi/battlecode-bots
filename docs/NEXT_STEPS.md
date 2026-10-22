@@ -295,6 +295,34 @@ published. Judge v34 on the ladder, or pay two submissions for a paired band run
 the dash-cooldown wait at holes on islands and shortcut (item 4 below) and a few stale cleared
 groups on contest.
 
+### 4d. Fight commitment and the ranged kite (built 2026-10-22 evening, submitted as v35)
+
+Trace of a gold-rush leader at 80% health with two enemies in sight: flee, farm, capture, flee
+every other turn, each flip a free hit (the outnumbered rule turned on and off with the enemy
+count, the balance sat near 1). Built with the tuning pass in mind: every constant carries its
+search range in `config.py`.
+
+- `FIGHT_COMMIT`: a fight decision is held for `FIGHT_COMMIT_TURNS` (3) in `decide._commitment`,
+  released early when the calibrated balance drops under `FIGHT_STAY_RATIO` (0.9), nothing is in
+  sight, or health crosses `FLEE_HEALTH`; `script_scores` keeps the fight lane at 1.1 while a
+  fight is on. The flee side (`FLEE_COMMIT`) is off: holding retreats for three turns turned
+  flicker into real retreats and raised deaths (931 against 880 in the v34 mirror, 36-44).
+- `OUTNUMBERED_TURNS` (2): the outnumbered rule needs two consecutive turns before it fires
+  unless the body is already fleeing. This is what fixed the flicker without the flee hold.
+- `KITE`: a ranged body in a fight with a melee enemy beside it dashes to a landing that keeps
+  the target in attack range and `KITE_MIN_GAP` (2) from every melee enemy, then attacks. A dash
+  is an ability, so it does not spend the ranged move-or-attack allowance (probe: dash then attack
+  runs; step then attack raises "Attack already used").
+- Mirror, 80 games each on engine 1.0.3: vs v34 43-37 (gems/100 50.6 vs 47.2, deaths 978 vs 957),
+  vs v31 46-34 (49.5 vs 46.2, deaths 1012 vs 955), vs v28 48-32 (+185, deaths 784 vs 1141),
+  vs v26 63-17 (+314, deaths 662 vs 1179). Exhaustions 31-35 (road-of-riches/big-world/ambush
+  first-turn setup, baseline), stalls 137-163.
+
+**Submitted as v35 (e8dd755, 2026-10-22 ~15:20 UTC).** Band replay queued to
+`data/challenges/v35-band200`, paired with v34's engine-1.0.3 run (same slots, same engine):
+the first reading of whether longer fights pay against real opponents (compare_runs' damage
+traded ratio and deaths, not only wins).
+
 ### 4. Routing at holes (looked at 2026-10-21; still open)
 
 Hole sealing after three failed crossings with the dash ready fires a few times a game but the
@@ -348,7 +376,7 @@ Only after 1 and 4, which change what the scorer should learn.
 - Wards are never placed: a ward on the lane to our farm shows a push before it arrives
   (teammates' views are not shared, so each body only sees its own). Teleport crystals are not an
   escape: the channel is three owner turn-ends during which the body cannot act (rules, 2026-10-21).
-- Ranged champions (Ren, Vesper Vale, Heart of Ruin) do not kite: a step after each attack.
+- Ranged champions kite since v35 (`KITE`, a dash before the attack); a plain step-kite is still not possible (step then attack is refused).
 - Hooks and corridors from side B fight at a disadvantage: an enemy-side penalty in `score_camp`
   when the enemy spawn is nearer than ours.
 - Camp reward split assumes even shares; the lowest ID gets the remainder.
