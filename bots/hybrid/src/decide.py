@@ -225,6 +225,28 @@ class Decider:
             balance = w.power_balance()
             if balance < config.FLEE_POWER_RATIO or (self.mode == FLEE and balance < config.OUTNUMBERED_STAY_BALANCE):
                 return self._set_mode(FLEE, "rule")
+        if config.EARLY_LEAVE and w.round <= config.EARLY_ROUNDS and not w.at_spawn and w.enemies:
+            # Opening: two enemies near and nobody of ours within reach is how most early deaths
+            # began (3-4 enemies by the end, 10+ rounds of warning). Leave now, not when hurt.
+            near = 0
+            for e in w.enemies:
+                if e.dist <= config.ALERT_SIGHT:
+                    near += 1
+            if near >= 2 and w.power_balance() < 1.0:
+                helpers = 0
+                for pos, hp, strength, d in w.allies:
+                    if d <= config.EARLY_LEAVE_ALLY_RANGE:
+                        helpers += 1
+                if helpers == 0:
+                    return self._set_mode(FLEE, "early-leave")
+        if config.EARLY_ALERT and w.round <= config.EARLY_ROUNDS and not w.enemies and not w.at_spawn                 and w.hp_ratio >= config.ALERT_MIN_HEALTH and w.contested is not None and w.contested[1] <= config.ALERT_FRESH:
+            # An ally is calling for help at a group near it: go there (as a farm target, so the
+            # walk uses the group's field; the fight starts on arrival when the enemy is in sight).
+            g = w.groups[w.contested[0]] if 0 <= w.contested[0] < len(w.groups) else None
+            if g is not None and g.anchor is not None and (self.target_group is None or g.index != self.target_group.index)                     and w.pos.chebyshev_distance(g.anchor) <= config.ALERT_TRAVEL:
+                self.target_group, self.target_state, self.target_bodies, self.target_round = g, g.state, 1, w.round
+                self.hold_since = -1
+                return self._set_mode(FARM, "alert")
         # Spawn camping (elk arena on the ladder: 79 deaths, most within 8 turns of our spawn at
         # full health, three enemies in sight): the spawn heals and enemies cannot enter it, so a
         # body that would walk out into a stronger group stays until it has left or allies are up.
@@ -359,7 +381,7 @@ class Decider:
         return target.hp / side_dps <= config.STAND_EDGE * w.hp / incoming
 
     def _set_mode(self, mode, source):
-        if mode == FLEE and config.STAND_GROUND and getattr(self, "cur_w", None) is not None and self.should_stand(self.cur_w):
+        if mode == FLEE and config.STAND_GROUND and source != "early-leave" and getattr(self, "cur_w", None) is not None and self.should_stand(self.cur_w):
             mode, source = FIGHT, source + "+stand"
         if mode == self.mode:
             self.mode_turns += 1

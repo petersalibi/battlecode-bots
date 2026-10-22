@@ -86,6 +86,12 @@ class Bot:
                                                         prev_mode, prev_turns))
         after_decide = fuel.remaining()
         self.d.review_cost = 0
+        if config.EARLY_ALERT and w.round <= config.EARLY_ROUNDS and w.enemies and w.nearest_enemy.dist <= config.ALERT_SIGHT:
+            # The opening: our lone bodies died to one enemy that became three or four while we kept
+            # farming. Call the team to the group we are working (byte 6, the party-capture call).
+            g = self.d.target_group if self.d.target_group is not None else self.d.capture_group
+            if g is not None and g.anchor is not None and w.pos.chebyshev_distance(g.anchor) <= config.ALERT_NEAR:
+                memory_codec.write_contested(g.index, w.round)
         if config.CONTEST_SHARE and w.enemies and w.nearest_enemy.dist <= config.CONTEST_RANGE:
             g = self.d.capture_group if mode == config.CAPTURE else self.d.target_group
             if g is not None and g.anchor is not None and w.pos.chebyshev_distance(g.anchor) <= config.CONTEST_NEAR:

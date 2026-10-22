@@ -244,7 +244,7 @@ class Actions:
             if present < d.target_bodies:
                 if d.hold_since < 0:
                     d.hold_since = w.round
-                elif w.round - d.hold_since > config.HOLD_MAX_TURNS and not (config.COOP and w.ally_claims(g.index)):
+                elif (w.round - d.hold_since > config.HOLD_MAX_TURNS and not (config.COOP and w.ally_claims(g.index)))                         or (config.EARLY_HOLD_MAX and w.round <= config.EARLY_ROUNDS and w.round - d.hold_since > config.EARLY_HOLD_MAX):
                     # Nobody came (and nobody is on the way). Leave this group alone for a while.
                     g.avoid_until = w.round + config.HOLD_AVOID_ROUNDS
                     d.target_group = None
