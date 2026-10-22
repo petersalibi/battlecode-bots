@@ -41,6 +41,10 @@ class Decider:
         self.cache_scored_round = -2000
         self.retargets = 0
         self.idle_turns = 0           # consecutive turns without a move or an action (bot.py)
+        self.osc_tiles = set()        # the tiles of a two-tile walk without an action, and its length (bot.py)
+        self.osc_turns = 0
+        self.capture_on_since = -1    # round we first stood on the current capture region (blind contest)
+        self.capture_blind_logged = False
         self.deaths = {}              # group index -> rounds this body died while targeting it
         self.camp_review_round = -1   # round the camp scorer reviews the last ranking (actions.farm)
         self.review_cost = 0          # fuel the camp review cost this turn (kept out of act_peak)
@@ -50,6 +54,7 @@ class Decider:
         self.gated_since = -1         # round the spawn gate started holding this body, or -1
         self.helping_group = None     # the group whose call for help this body answered
         self.chase_handle = None      # the weak enemy this body is running down, and until when
+        self.doomed = False           # last stand this turn (decide.should_stand): target choice prefers the finishable kill
         self.chase_until = -1
         self.regroup_pos = None       # opening: the ally tile this body is stepping towards, and until when
         self.regroup_until = -1
@@ -232,6 +237,7 @@ class Decider:
 
     def choose_mode(self, w, turn):
         self.cur_w = w
+        self.doomed = False           # set by should_stand when this turn is a last stand
         mask = self.masks(w, turn)
         self.last_mask = mask
         self.last_scores = None
@@ -535,19 +541,41 @@ class Decider:
         70% of our deaths came in flee mode, 5% in fight mode, most in our own half; in lost
         one-on-ones we were at 73% health against their 87%). Stand and fight when the walk home
         would most likely kill us anyway, or when our side kills the weakest chaser first."""
+        self.doomed = False
         if not w.enemies or w.at_spawn:
             return False
         near = [e for e in w.enemies if e.dist <= config.STAND_CHASE_RANGE]
         if not near:
             return False                                        # far enough to get away
         incoming = 0.0
+        in_reach = 0.0                                          # damage a turn from enemies that hit us where we stand
         for e in near:
             incoming += e.dmg
+            if e.dist <= self._enemy_reach(e):
+                in_reach += e.dmg
         if incoming <= 0:
             return False
         home = w.spawn_field.get(w.pos)
-        escape = min(home if home is not None and home >= 0 else 99, config.STAND_CHASE_TURNS)
-        if incoming * escape >= w.hp * config.STAND_FLEE_DEATH and w.hp_ratio >= config.STAND_FUTILE_MIN_HEALTH:
+        home = home if home is not None and home >= 0 else 99
+        safety = min(home, self._safety_distance(w, max(config.STAND_ESCAPE, config.DOOMED_TURNS)))
+        dash_ready = False
+        if w.has_dash:
+            for rec in w.abilities:
+                if rec.is_dash:
+                    try:
+                        dash_ready = rec.ability.cooldown() == 0
+                    except Exception:
+                        pass
+        if config.DOOMED_RULE and in_reach > 0 and in_reach * config.DOOMED_TURNS >= w.my_ehp() \
+                and safety > config.DOOMED_TURNS and not dash_ready:
+            # Dead within DOOMED_TURNS to the enemies already hitting us, nothing safe that close, no
+            # dash: a retreat only gives them the free hits. Spend the body on damage.
+            self.doomed = True
+            return True
+        escape = min(home, config.STAND_CHASE_TURNS)
+        if incoming * escape >= w.hp * config.STAND_FLEE_DEATH and w.hp_ratio >= config.STAND_FUTILE_MIN_HEALTH \
+                and safety > config.STAND_ESCAPE and not dash_ready \
+                and (config.STAND_MIN_BALANCE <= 0 or w.power_balance() >= config.STAND_MIN_BALANCE):
             return True                                         # running would not save us
         side_dps = w.dps
         for pos, hp, strength, d in w.allies:
@@ -556,9 +584,37 @@ class Decider:
         target = min(near, key=lambda e: e.hp)
         return target.hp / side_dps <= config.STAND_EDGE * w.hp / incoming
 
+    @staticmethod
+    def _enemy_reach(e):
+        try:
+            return max(1, e.champion.attack_range())
+        except Exception:
+            return 1
+
+    @staticmethod
+    def _safety_distance(w, radius):
+        """Chebyshev distance to the nearest bush within radius that no enemy stands in (out of
+        sight there). Spawn is handled by the caller through its field; allies are not an escape,
+        they are a reason to stand (the side-kills-first clause)."""
+        best = 99
+        bushes = w.bushes
+        px, py = w.pos.x, w.pos.y
+        taken = set()
+        for e in w.enemies:
+            if e.dist <= radius:
+                taken.add((e.pos.x, e.pos.y))
+        for r in range(1, min(radius, best - 1) + 1):
+            for dx in range(-r, r + 1):
+                for dy in ((-r, r) if abs(dx) < r else range(-r, r + 1)):
+                    x, y = px + dx, py + dy
+                    if 0 <= x < w.width and 0 <= y < w.height and (x, y) not in taken \
+                            and bushes.is_set(w.make_tile(x, y)):
+                        return r
+        return best
+
     def _set_mode(self, mode, source):
         if mode == FLEE and config.STAND_GROUND and source != "early-leave" and getattr(self, "cur_w", None) is not None and self.should_stand(self.cur_w):
-            mode, source = FIGHT, source + "+stand"
+            mode, source = FIGHT, source + ("+doomed" if self.doomed else "+stand")
         if mode == self.mode:
             self.mode_turns += 1
         else:
@@ -817,9 +873,15 @@ class Decider:
                 if enemy.handle == self.chase_handle:
                     self.fight_source = "chase"
                     return enemy
+        doomed = getattr(self, "doomed", False) and self.mode == FIGHT
         for enemy in targets:
             in_range = enemy.dist <= w.attack_range
-            key = (1 if in_range else 0, -(enemy.hp / max(enemy.max_hp, 1)), enemy.gems, -enemy.dist)
+            if doomed:
+                # Last stand: the kill we can still finish (100 gold) over anything else, then the
+                # most damage per turn we can land, so only targets in reach count.
+                key = (1 if in_range else 0, -enemy.ehp, enemy.gems, -enemy.dist)
+            else:
+                key = (1 if in_range else 0, -(enemy.hp / max(enemy.max_hp, 1)), enemy.gems, -enemy.dist)
             if best_key is None or key > best_key:
                 best, best_key = enemy, key
         self.fight_source = "script"

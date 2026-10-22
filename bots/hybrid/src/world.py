@@ -124,7 +124,7 @@ def champion_power(champion, hp, strength):
 
 
 class Enemy:
-    __slots__ = ("champion", "handle", "pos", "hp", "max_hp", "strength", "gems", "dist", "dmg", "ehp")
+    __slots__ = ("champion", "handle", "pos", "hp", "max_hp", "strength", "gems", "dist", "dmg", "ehp", "on_spawn")
 
     def __init__(self, champion, my_pos):
         self.champion = champion
@@ -143,6 +143,7 @@ class Enemy:
             except Exception:
                 pass
         self.dist = my_pos.chebyshev_distance(self.pos)
+        self.on_spawn = False                    # standing on its own spawn (set by World._refresh_enemies)
         try:
             self.gems = champion.gem_count()
         except Exception:
@@ -198,6 +199,10 @@ class World:
         self.last_enemy_round = -10_000
         self.last_enemy_pos = None
         self.enemies_killed = []       # rounds at which an enemy was seen to die
+        self.distant_enemies = []      # in sight but unreachable and out of reach (config.THREAT_DETOUR)
+        self._threat_walk = None       # that test's walking field, reused while we stand still
+        self._threat_walk_at = None
+        self._threat_walk_round = -99
         self.events = set()
         self.prev_gems = 0
         self.ward_round = -10_000
@@ -610,11 +615,79 @@ class World:
     def _refresh_enemies(self):
         had_enemy = self.last_enemy_round == self.round - 1
         self.enemies = []
+        self.distant_enemies = []
         for champion in vision.champions(Team.ENEMY):
             try:
                 self.enemies.append(Enemy(champion, self.pos))
             except Exception:
                 continue
+        if self.enemies and config.SPAWN_SITTERS_DISTANT:
+            # An enemy on its own spawn heals every turn and cannot be reached (reverse spiral: the
+            # two spawns touch at the centre; our four bodies brawled across the line for 2,000
+            # rounds, 14 gems, while the opponent farmed the outer ring). Not a target, and not a
+            # threat unless it is beside us; it becomes one the moment it steps off.
+            keep = []
+            for e in self.enemies:
+                e.on_spawn = self.spawn_enemy.is_set(e.pos)
+                if e.on_spawn and e.dist > 1:
+                    self.distant_enemies.append(e)
+                else:
+                    keep.append(e)
+            self.enemies = keep
+        if self.enemies and config.THREAT_DETOUR:
+            # An enemy behind a wall is in sight but no threat until it can walk to us or we stand in
+            # its reach. Two tests: the walk home differs from ours by more than the straight line
+            # plus the detour (two field lookups), or, on small maps and only when a flee rule could
+            # fire, a walking field from here explored THREAT_FIELD_RANGE out (a whole-board field
+            # costs ~80 fuel a tile, so never on 100x100 maps in contact).
+            far = [e for e in self.enemies if e.dist > 2]
+            if far:
+                try:
+                    keep = []
+                    walk = None
+                    my_home = self.spawn_field.get(self.pos)
+                    want_field = (self.width * self.height <= config.THREAT_FIELD_MAX_AREA
+                                  and (len(self.enemies) >= 2 or self.hp_ratio < config.FLEE_HEALTH))
+                    for e in self.enemies:
+                        if e.dist <= 2:
+                            keep.append(e)
+                            continue
+                        try:
+                            reach = max(1, e.champion.attack_range())
+                        except Exception:
+                            reach = 1
+                        if e.dist <= reach + 1:
+                            keep.append(e)
+                            continue
+                        their_home = self.spawn_field.get(e.pos)
+                        if my_home is not None and their_home is not None and my_home != UNREACHABLE \
+                                and their_home != UNREACHABLE and abs(my_home - their_home) > e.dist + config.THREAT_DETOUR:
+                            self.distant_enemies.append(e)   # the walk between us is at least that long
+                            continue
+                        if not want_field:
+                            keep.append(e)
+                            continue
+                        if walk is None:
+                            if self._threat_walk is not None and self._threat_walk_at == (self.pos.x, self.pos.y) \
+                                    and self.round - self._threat_walk_round <= config.THREAT_FIELD_REUSE:
+                                walk = self._threat_walk
+                            else:
+                                roots = Bitboard()
+                                roots.set(self.pos)
+                                walls = self.static_blocked
+                                if walls.is_set(self.pos):
+                                    walls = walls & ~roots
+                                walk = DistanceField()
+                                walk.compute(walls, roots, Bitboard(), config.THREAT_FIELD_RANGE)
+                                self._threat_walk, self._threat_walk_at, self._threat_walk_round = walk, (self.pos.x, self.pos.y), self.round
+                        steps = walk.get(e.pos)
+                        if steps != UNREACHABLE and steps <= e.dist + config.THREAT_DETOUR:
+                            keep.append(e)
+                        else:
+                            self.distant_enemies.append(e)
+                    self.enemies = keep
+                except Exception:
+                    self.distant_enemies = []
         self.nearest_enemy = None
         self.enemy_power = 0.0
         self.enemy_power_eff = 0.0

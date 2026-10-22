@@ -127,6 +127,13 @@ class Actions:
         """Step towards the group. Returns True if we moved or dashed."""
         w = self.w
         field = self.approach_field(g, radius)
+        if config.LIVE_APPROACH and field.get(w.pos) == W.UNREACHABLE and self._greedy_to_camp(g, radius):
+            # Standing on a dead camp tile: the static field's walk-off and the live approach pull
+            # opposite ways (yellow brick road, ranked: three bodies paced two tiles for 1,000+
+            # rounds beside a living gem cluster). A greedy step towards a living camp in sight
+            # decides first here; it costs eight distance checks, not a field (a live field on
+            # every such turn exhausted ambush and big world: 100x100 maps).
+            return True
         if self.nav.step_along(field):
             self.nav.try_dash(field)
             return True
@@ -135,6 +142,34 @@ class Actions:
             return True
         if not config.LIVE_APPROACH:
             return False
+        return self._live_approach(g, radius)
+
+    def _greedy_to_camp(self, g, radius):
+        """One step onto the free neighbour nearest a living camp of the group in sight, when that
+        brings us closer than we stand (dead camp tiles are free; the static field calls them walls)."""
+        w = self.w
+        if not w.can_move or w.cast_exclusive:
+            return False
+        alive = [pos for camp, gi, pos, hp in w.visible_camps if gi == g.index and hp > 0]
+        if not alive:
+            return False
+        here = min(w.pos.chebyshev_distance(p) for p in alive)
+        if here <= radius:
+            return False                                        # already in reach: nothing to do here
+        best, best_d = None, here
+        for tile in self.nav.blocked().reachable_tiles(w.pos, 1).positions():
+            d = min(tile.chebyshev_distance(p) for p in alive)
+            if d < best_d:
+                best, best_d = tile, d
+        if best is None:
+            return False
+        if self.nav._move(best):
+            self.trace += " greedy"
+            return True
+        return False
+
+    def _live_approach(self, g, radius):
+        w = self.w
         # On the static ring, cut off from it, or walled in: the cached field treats every camp
         # tile as a wall, but dead camps are walkable and the living ones can sit inside a cluster
         # of dead ones (packs, gem fields: 72% of all ten-turn stalls) or three tiles away behind
@@ -372,14 +407,47 @@ class Actions:
         if d.capture_group is not g:
             d.capture_group = g
             d.capture_since = w.round
+            d.capture_on_since = -1
+            d.capture_blind_logged = False
+        if not g.tiles.is_set(w.pos):
+            d.capture_on_since = -1
         if g.tiles.is_set(w.pos):
             # Standing on the region: stay, and hit anything hostile in reach. An enemy on the
             # region resets the timer every round, so a standoff never ends on its own (corridors
             # on the ladder: 1,800 rounds face to face, 0 gems): fight it when we are not weaker
             # and it is close, otherwise give the region up for a while after a few turns.
             self.waiting = True
+            if d.capture_on_since < 0:
+                d.capture_on_since = w.round
             enemy = self.d.choose_fight_target(turn, w)
             contested = any(g.tiles.is_set(e.pos) for e in w.enemies)
+            if not contested and w.round - d.capture_on_since > config.CAPTURE_BLIND_TURNS:
+                # No reward after three timers' worth of standing here and nobody in sight: an
+                # enemy holds a tile of the region we cannot see. One body (the lowest slot
+                # claiming the region) keeps standing, which denies them the reward for as long
+                # as they deny us (yellow brick road's 600-gold rows: leaving both lost to v35
+                # twice, holding them with two bodies won on the ladder); every other body here
+                # leaves it alone for a while.
+                holder = False
+                if config.CAPTURE_BLIND_HOLD:
+                    holder = True
+                    for slot, (status, group) in enumerate(w.claims):
+                        if slot != w.slot and slot < w.slot and status == memory_codec.STATUS_CAPTURE and group == g.index:
+                            holder = False                      # a lower slot already holds it
+                            break
+                if not holder:
+                    print("r%d %s: capture of group %d blind-contested after %d turns at %d,%d" % (
+                        w.round, w.kind_name, g.index, w.round - d.capture_on_since, w.pos.x, w.pos.y), flush=True)
+                    g.avoid_until = w.round + config.CAPTURE_STANDOFF_AVOID
+                    d.capture_group = None
+                    d.capture_on_since = -1
+                    d.camp_cache = None
+                    self.waiting = False
+                    return self.farm(turn)
+                if not d.capture_blind_logged:
+                    d.capture_blind_logged = True
+                    print("r%d %s: holding blind-contested group %d at %d,%d" % (
+                        w.round, w.kind_name, g.index, w.pos.x, w.pos.y), flush=True)
             if contested and config.CAPTURE_PARTY:
                 memory_codec.write_contested(g.index, w.round)       # the call for a party capture
             if enemy is not None and enemy.dist <= w.attack_range:
@@ -600,6 +668,16 @@ class Actions:
             if rec.is_cc and rec.enemies and nearest.dist <= rec.range and self._ready(rec) and not rec.exclusive:
                 self._cast(rec, nearest.champion)
                 break
+        if config.PARTING_SHOT and not w.is_ranged and w.can_attack:
+            # Melee may attack and then move in the same turn: hit the weakest adjacent enemy first,
+            # then step away. The old strike-back fired after the step, when the chaser was already
+            # two tiles off (band dumps: 245 hits in 4,455 such turns).
+            shot, shot_hp = None, None
+            for e in w.enemies:
+                if e.dist <= 1 and (shot_hp is None or e.ehp < shot_hp):
+                    shot, shot_hp = e, e.ehp
+            if shot is not None and self._attack_with_reset(shot.champion, shot.pos):
+                self.trace += " shot"
         dashed = config.FLEE_DASH_AWAY and self.nav.dash_away(threats, w.spawn_field)
         moved = self._escape_step(threats)
         if moved is None:

@@ -327,6 +327,49 @@ the best band run so far), gathered 577 (v34 485), banked by r300 48.6 / r600 12
 0.50 to 0.61; ranged attack rate in contact 38% to 41%. The ladder read at the same time: v34
 32-18 over its 50 ranked games (v33 on engine 1.0.3: 20-25), rank 179 at 1,663.
 
+### 4e. Flee rework and the ranked-game loops (built 2026-10-22 evening, after v35)
+
+Contact study on v35's band run (tools/analysis/fightstats.py, contact_modes.py, flee_turns.py,
+cornered.py): the band attacks on 43% of contact turns, we on 30%, on the same champions. Our
+contact turns split fight 47% (58% attacks), flee 36% (1.7% attacks, 97 damage taken a turn,
+a fifth dead within five turns), farm/capture 17%. 4,455 melee flee turns had an enemy
+adjacent at the start and 245 hit it. A melee body at 30-45% with a melee chaser adjacent died
+32-36% of the time fleeing and 9-15% fighting; escape distance barely changed the flee rate.
+
+- `PARTING_SHOT`: a fleeing melee body hits the weakest adjacent enemy before stepping (the
+  engine allows attack then move: probe, 147 such turns). Alone: 51-29 (+105) vs v35.
+- Stand knobs for the tuning pass: `STAND_FUTILE_MIN_HEALTH` [0.25-0.5], `STAND_MIN_BALANCE`
+  [0-0.9], `STAND_ESCAPE` [0-4] (a bush or spawn that close, or a ready dash, means run). The
+  first tools/tune.py sweep of the health knob (0.5/0.35/0.25) was 33-47 / 28-52 / 34-46,
+  all with a wrong first version of the rule (allies counted as an escape); unswept since.
+- `DOOMED_RULE` (Tyler: a guaranteed death is spent on damage, not on running): dead within
+  `DOOMED_TURNS` to the enemies already in reach, nothing safe that close, no dash: fight the
+  finishable kill. Off: 41-39 with it against 51-29 without, deaths 947 vs 857. The chasers in
+  the mirror give up more often than the rule assumes; retry with the real band.
+- Ranked-game loops (Tyler's report, replays in data/replays/ours-v35): (1) yellow brick road
+  vs ExCode: both 30-camp rows cleared by r100, ExCode parked one body at the far end of each,
+  out of sight, so the capture never completed and two of ours waited 1,900 rounds in capture;
+  three others paced two tiles for 1,000+ rounds beside a living gem cluster (the static
+  field's walk-off and the live approach pull opposite ways on a dead camp tile). (2) reverse
+  spiral vs :3 <3: the two spawns touch at the centre; our bodies brawled on spawn (the mirror
+  scored 0-0 on this map) while the opponent farmed the outer ring; a body also stood in flee
+  for 1,950 rounds from enemies behind the spiral wall. Fixes: `CAPTURE_BLIND_TURNS` (no reward
+  and nobody in sight after 14 turns on the region: the lowest claiming slot holds it, denial,
+  `CAPTURE_BLIND_HOLD`; the others leave; leaving both rows lost to v35 twice), a greedy step
+  towards a living camp in sight before the walk-off (`actions._greedy_to_camp`; a live field
+  there exhausted the 100x100 maps), `SPAWN_SITTERS_DISTANT` (an enemy on its own spawn is not
+  a target nor, beyond distance 1, a threat), `THREAT_DETOUR` (an enemy in sight whose walk to
+  us is much longer than the straight line, by the spawn-field difference or a small-map walking
+  field, goes to `w.distant_enemies`), and the stall guard now counts pacing between two tiles
+  (`OSCILLATION_TURNS`) and idle flee, so the harness's stall column sees these.
+- Mirror vs v35, all 40 maps both sides: **51-29, gem margin +210, gems/100 61.3 vs 46.4,
+  deaths 1047 vs 1189**, exhaustions 39 (baseline), stalls 234 with the new counters (corridors
+  70, fracture 26, great wall 19). Reverse spiral 1015-387 both sides (was 0-0), yellow brick
+  road 1-1. The log line now carries `src=` (the decision source) for contact_modes.py.
+- Open: boss battle is scoreless (a body with 1,230 gems and no reachable altar idles 1,000
+  rounds); the blind-contest give-up repeats every 60 rounds per body (`CAPTURE_STANDOFF_AVOID`
+  is per body, not shared).
+
 ### Where we are (v35, e8dd755, live 2026-10-22 15:20 UTC)
 
 - Band wins on the same 70 games: v14 6, v26 12, v28 15, v31 16, v33 14, v34 11 (engine 1.0.3

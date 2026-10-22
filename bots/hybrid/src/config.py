@@ -52,6 +52,10 @@ DEATH_MEMORY_DROP = 3       # ... and this many deaths drop the group altogether
 CAPTURE_FIGHT_BALANCE = 0.9 # on a contested region, fight the intruder unless clearly weaker than this ...
 CAPTURE_STANDOFF_TURNS = 12 # give a contested region up after this many turns face to face ...
 CAPTURE_STANDOFF_AVOID = 60 # ... and leave it alone for this long
+CAPTURE_BLIND_HOLD = True   # ... the lowest claiming slot keeps standing on it (denial), the others leave (actions.capture)
+CAPTURE_BLIND_TURNS = 14    # standing on a cleared region this long with no reward and no enemy in sight means an enemy
+                            # we cannot see holds another tile of it (yellow brick road: a 30-tile row, ExCode parked one
+                            # body at its far end and two of ours waited 1,900 rounds): give it up like a standoff
 BOSS_TRIPS = False          # a group too strong for the whole team in one trip is planned over several (decide.score_camp) ...
 BOSS_MIN_GEMS = 150         # ... when it is worth at least this many gems (golem groups: 200-470) ...
 BOSS_MAX_TRIPS = 4          # ... in at most this many trips, each costing the walk home and back plus
@@ -97,6 +101,13 @@ FIGHT_RANGE = 6             # consider enemies within this Chebyshev distance
 KILL_STEAL_HEALTH = 0.40    # attack an enemy below this regardless of balance (kills pay 100 gold + bag)
 FLEE_POWER_RATIO = 0.7      # flee when our power is below this fraction of theirs
 FLEE_ENEMY_RANGE = 5
+SPAWN_SITTERS_DISTANT = True  # an enemy on its own spawn is neither a target nor (beyond distance 1) a threat (world)
+THREAT_DETOUR = 4           # an enemy in sight whose walk to us is more than this longer than its straight-line distance,
+                            # and out of its own attack reach, is not a threat: it goes to w.distant_enemies (reverse spiral:
+                            # a body stood in flee for 1,950 rounds from three enemies behind the spiral wall)
+THREAT_FIELD_RANGE = 14     # how far the walking field for that test is explored ...
+THREAT_FIELD_MAX_AREA = 4096  # ... only on maps up to this many tiles (a field allocates the whole board) and only when a
+THREAT_FIELD_REUSE = 6      # flee rule could fire; it is reused for this many rounds while the body stands still
 FLEE_DASH_AWAY = True       # a fleeing dash champion dashes away from the threats before stepping
 SPAWN_GATE = True           # on spawn with a stronger enemy group in sight: stay (heal, safe) instead of walking out
 SPAWN_GATE_RANGE = 10       # "in sight": an enemy within this of the spawn tile we stand on
@@ -155,6 +166,8 @@ LIVE_APPROACH_RANGE = 20    # ... with a local field explored this far
 OFF_WALL_RADIUS = 4         # a body deep inside a cleared cluster looks this far for a tile its route reaches (navigation.step_along)
 STUCK_TURNS = 10            # turns without a move or an action before a body drops its target ...
 STUCK_AVOID_ROUNDS = 20     # ... and leaves that group alone for this long (usually it is just crowded)
+OSCILLATION_TURNS = 16      # a body walking between two tiles this long without an action counts as stuck too (the
+                            # harness only saw same-tile stalls; yellow brick road had three bodies pacing 1,000+ rounds)
 FIRST_TURN_QUIET = 150_000   # below this after setup, the first turn logs nothing and ends at once
 FIRST_TURN_MIN = 1_000_000  # end the first turn without acting if setup left less than this ...
 FIRST_TURN_PER_TILE = 100   # ... plus this per map tile (field computes scale with the map area)
@@ -213,9 +226,18 @@ STAND_GROUND = True         # a flee with a chaser in reach turns into a fight w
 STAND_CHASE_RANGE = 3       # ... enemies this close are chasers ...
 STAND_CHASE_TURNS = 6       # ... that keep hitting for at most this many turns of the walk home ...
 STAND_FLEE_DEATH = 0.9      # ... stand if their damage over that walk would take this share of our health ...
-STAND_FUTILE_MIN_HEALTH = 0.5  # ... (only above this health ratio: without it 35-43 vs v13, deaths 1379 vs 843) ...
+STAND_FUTILE_MIN_HEALTH = 0.5  # ... (only above this health ratio [0.25-0.5]: without it 35-43 vs v13, deaths 1379 vs 843; the
+                            # v35 band dumps say a melee body at 30-45% with a melee chaser adjacent died 32-36% of the time
+                            # fleeing and 9-15% fighting, so this is the first knob of the tuning pass) ...
+STAND_MIN_BALANCE = 0.0     # ... and only while the local power balance is at least this [0.0-0.9] (0 = no balance test) ...
+STAND_ESCAPE = 1            # ... unless safety (own spawn, a bush, an ally) is within this many tiles [0-4] or a dash is ready ...
 STAND_ALLY_RANGE = 4        # ... or if our side (us and allies this close) ...
 STAND_EDGE = 1.0            # ... kills the weakest chaser in this share of the time it needs to kill us
+DOOMED_RULE = False         # (off: 41-39 vs v35 with it, 51-29 without; deaths 947 vs 857) a body that dies within DOOMED_TURNS to the enemies already in reach, with no safety that close and no
+DOOMED_TURNS = 2            # dash ready, never retreats: it fights for the most damage it can still do [1-3] (decide.should_stand,
+                            # Tyler 2026-10-22: a guaranteed death is spent on damage for the team, not on running)
+PARTING_SHOT = True         # a fleeing melee body hits an adjacent enemy BEFORE stepping away (the engine allows attack then move:
+                            # probe 2026-10-22, 147 such turns; band dumps: 4,455 such flee turns, 245 hits with the step-first order)
 FLEE_STRIKE_BACK = True     # a melee body that stepped away still hits a chaser in reach (actions.flee)
 # The opening (challenge games vs teams 200 above: our bodies dead 20% of rounds 1-150 against
 # their 8%; 165 early deaths, most a lone farmer that saw one enemy, kept farming while three or

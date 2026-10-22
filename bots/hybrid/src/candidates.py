@@ -197,5 +197,5 @@ class Turn:
     # ---- fights --------------------------------------------------------------------
     def fight_targets(self):
         if self._fight is None:
-            self._fight = [e for e in self.w.enemies if e.dist <= config.FIGHT_RANGE]
+            self._fight = [e for e in self.w.enemies if e.dist <= config.FIGHT_RANGE and not e.on_spawn]
         return self._fight

@@ -146,9 +146,9 @@ class Bot:
             self.last_logged_mode = mode
             target = self.d.target_group.index if self.d.target_group is not None else -1
             avg = self.fuel_total // self.turns if self.turns else 0
-            print("r%d %s: %s hp=%d%% gems=%d gold=%d target=%d enemies=%d fuel_used=%d avg=%d max=%d retarget=%d/%s [%s]%s" % (
+            print("r%d %s: %s hp=%d%% gems=%d gold=%d target=%d enemies=%d fuel_used=%d avg=%d max=%d retarget=%d/%s [%s] src=%s%s" % (
                 w.round, w.kind_name, config.MODE_NAMES[mode], int(w.hp_ratio * 100), w.gems, w.gold, target,
-                len(w.enemies), used, avg, self.fuel_max, self.d.retarget_peak, self.d.camp_source, self.worst,
+                len(w.enemies), used, avg, self.fuel_max, self.d.retarget_peak, self.d.camp_source, self.worst, self.d.last_source,
                 (" squad=%s" % (self.d.squad_stats,)) if config.SQUAD_LOG and w.round % config.LOG_EVERY == 0 else ""), flush=True)
         if not w.near_ready:
             # Leftover fuel builds the group anchors and vision masks, a few groups per turn, after
@@ -181,15 +181,30 @@ class Bot:
         hit a pathing hole. Drop its target, shun that group for a while and log it, so the harness
         can count stalls instead of them silently costing a game."""
         w, d, act = self.w, self.d, self.act
-        idle = (not w.moved and not act.acted and not act.waiting and not w.at_spawn and not w.waiting_dash
-                and mode in (config.FARM, config.CAPTURE, config.TRIBUTE))
+        passive = (not act.acted and not act.waiting and not w.at_spawn and not w.waiting_dash
+                   and mode in (config.FARM, config.CAPTURE, config.TRIBUTE, config.FLEE))
+        idle = passive and not w.moved
         d.idle_turns = d.idle_turns + 1 if idle else 0
-        if d.idle_turns < config.STUCK_TURNS:
+        # Pacing between two tiles without ever acting is the same hole with a step in it.
+        if passive:
+            key = (w.pos.x, w.pos.y)
+            if key in d.osc_tiles or len(d.osc_tiles) < 2:
+                d.osc_tiles.add(key)
+                d.osc_turns += 1
+            else:
+                d.osc_tiles = {key}
+                d.osc_turns = 1
+        else:
+            d.osc_tiles = set()
+            d.osc_turns = 0
+        if d.idle_turns < config.STUCK_TURNS and d.osc_turns < config.OSCILLATION_TURNS:
             return
         g = d.capture_group if mode == config.CAPTURE else d.target_group
-        print("r%d %s: stuck %d turns in %s at %d,%d gems=%d target=%d" % (
-            w.round, w.kind_name, d.idle_turns, config.MODE_NAMES[mode], w.pos.x, w.pos.y, w.gems,
-            g.index if g is not None else -1), flush=True)
+        print("r%d %s: stuck %d turns in %s at %d,%d gems=%d target=%d%s" % (
+            w.round, w.kind_name, max(d.idle_turns, d.osc_turns), config.MODE_NAMES[mode], w.pos.x, w.pos.y, w.gems,
+            g.index if g is not None else -1, " pacing" if d.idle_turns < config.STUCK_TURNS else ""), flush=True)
+        d.osc_tiles = set()
+        d.osc_turns = 0
         if g is not None:
             g.avoid_until = w.round + config.STUCK_AVOID_ROUNDS
         d.target_group = None

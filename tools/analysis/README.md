@@ -50,6 +50,20 @@ unattended. **It tags HEAD, submits and pushes to `testing`**, so only run it wi
 It waits until the given UTC time (for the quota), queues the 14 replay groups, collects them,
 and prints `compare_runs` against the earlier tags plus the fight table.
 
+## 2b. Parameter sweeps (`tools/tune.py`)
+
+Tier 1 of the tuning plan: the working copy with one or more config constants at several values,
+each against a tagged version on every map from both sides, scored by the paired gem margin.
+
+```
+python tools/tune.py --vs hybrid-v35 STAND_FUTILE_MIN_HEALTH=0.5,0.35,0.25
+python tools/tune.py --vs hybrid-v35 PARTING_SHOT=True,False DOOMED_RULE=True,False   # cross product
+```
+
+Good to about +-8 wins and +-60 gems a point, so it only rejects points that clearly lose; the
+band (one value an hour, free submissions) and the ladder decide between survivors. Rewrites
+`config.py` in place for each point and restores it; do not edit the bot while a sweep runs.
+
 ## 3. Behaviour studies (one-off; each writes a JSON for a later read)
 
 | Script | Question it answers |
@@ -70,6 +84,12 @@ and prints `compare_runs` against the earlier tags plus the fight table.
 | `compare.py <dir>` | Ad hoc comparison of `top25.json` and `ours.json` profiles |
 | `fetch_band.py <n>` | The band teams' own ranked games, into `data/replays/band-1.0.2` |
 | `rating.py` | Our current rating and rank |
+| `stalls.py` | Classifies the harness's "stuck" lines against the dumps (dead-camp approach, ring, traps) |
+| `stuck.py <base> <match id> <side>` | Stuck windows in one dumped game: 20+ turns within two tiles, with actions, mode (from our stdout) and enemies. Found the yellow-brick-road capture wait and the pacing loop |
+| `fightstats.py <base> raw ladder teto\|opp <out>` | Contact turns (enemy within 4): attack/cast/move/idle rates, damage traded, focus, per champion |
+| `contact_modes.py <base>` | Our contact turns split by our mode: where the attack rate goes (flee was 36% of contact at 1.7% attacks) |
+| `flee_turns.py <base>` | Our flee-mode contact turns: chaser distance and class, hp band, hits, deaths within 5 |
+| `cornered.py <base>` | Melee body with a melee enemy adjacent: flee vs fight outcomes by hp band and escape distance (source of the stand knobs) |
 
 These were written fast during the investigation. They work, but expect hardcoded team names
 ("Teto Territory") and minimal argument checking.
