@@ -498,11 +498,20 @@ Three pieces, every constant with its range, all `COHESION` / `FLEE_TO_ALLY` / `
   behaviour, submitted as v41 as the ladder restore and a band noise control). Lesson: the
   mirror's "both on is best" was wrong, as predicted for a cohesion change; the band must test
   each piece alone, one submission an hour (FLEE_TO_ALLY alone, then COHESION alone).
+- **v41 control (same behaviour as v39, 19:44 UTC): 20 wins, deaths 23.3, gathered 612**, against
+  v39's 26 / 20.3 / 723 an hour earlier. The band's own numbers moved the same way (their
+  gathered per body-game 196 -> 223/214, their dead share 15.3% -> 11.0/11.9%): band teams
+  updated their bots between 18:44 and 19:30. So v40 vs v41 is the fair pair, 17 vs 20, inside
+  the +-4 noise: the cohesion pieces are neutral to slightly negative, not the collapse the
+  v39 comparison suggested. Two lessons: (1) the "fixed" band drifts as its teams submit, so
+  only runs an hour apart are paired; a control run of the live version alongside every
+  experiment is worth its 70 games; (2) effects under ~5 wins cannot be read on the band at
+  all. Cohesion stays off; a single-piece band test needs a bigger expected effect.
 
 ### Where we are (v39, aad47e3, live 2026-10-22 18:44 UTC)
 
 - Band wins on the same 70 games: v14 6, v26 12, v28 15, v31 16, v33 14, v34 11 (engine 1.0.3
-  from here), v35 17, v36 26, v37 24, v38 27, v39 26. Deaths per game 19 to 20 throughout; gathering is the lever that
+  from here), v35 17, v36 26, v37 24, v38 27, v39 26, v40 17 and v41 (= v39) 20 after the band updated. Deaths per game 19 to 20, then 23 against the updated band; gathering is the lever that
   moved (485 -> 577 -> 757 a game).
 - Ladder: v34 64% over 50 games, rank 179 / 1,663. 1,750 still needs about 60% against the
   opponents that come with it.
