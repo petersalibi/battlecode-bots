@@ -14,6 +14,7 @@ version, which makes before/after runs exact pairs. Challenges always play the l
 so submit first and wait for the run to finish before submitting again. Quota is 50 groups per
 rolling hour. The full analysis is in the "Band Gap Analysis" Claude doc
 (https://claude.ai/artifact/8UR65wjhKK3UgifhLuSmTc).
+How to run the band tests and the comparison and analysis scripts: `tools/analysis/README.md`.
 
 **Lesson: the mirror misleads on fight judgment.** Calibration 0.5 lost 34-44 in the mirror and
 doubled band wins. Use the mirror only to catch regressions and exhaustions. Judge anything about
