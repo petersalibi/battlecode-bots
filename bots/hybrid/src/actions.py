@@ -544,7 +544,10 @@ class Actions:
             return
         if w.enemy_within(config.RECALL_SAFE_ENEMY_TURNS):
             # Too dangerous to channel here: put distance between us first.
-            self.nav.step_away([e.pos for e in w.enemies], w.spawn_field)
+            threats = [e.pos for e in w.enemies]
+            if config.CAMP_POWER:
+                threats += w.camp_threats                          # a camp's hit would cancel the recall too
+            self.nav.step_away(threats, w.spawn_field)
             return
         try:
             w.me.recall()
@@ -675,6 +678,8 @@ class Actions:
             self.nav.step_along(w.spawn_field)
             return
         threats = [e.pos for e in w.enemies]
+        if config.CAMP_POWER:
+            threats += w.camp_threats                              # awake camps on us (or maybe): out of their reach too
         if config.SQUADS and self.d.target_group is not None:
             self.claim_group = self.d.target_group.index           # BUSY + group: the squad's retreat signal
         # A stun on the closest pursuer buys a turn.

@@ -96,6 +96,9 @@ class Group:
 
 
 _kind_of = {}   # champion handle -> name (a champion's type never changes)
+_camp_tile_stats = {}   # camp spawn tile -> (strength, reach): camps never move
+CAMP_MAX_GROUPS = 2     # awake groups judged per turn, nearest first (each costs a pass over the champions)
+DASH_KINDS = ("ISSAC", "VESPER_VALE", "VENDETTA", "REN", "HEART_OF_RUIN")   # a dash closes two more tiles
 
 
 def champion_power(champion, hp, strength):
@@ -180,6 +183,10 @@ class AbilityRec:
 
 
 class World:
+    # Camp targets (_refresh_camp_targets): class defaults, so turns with no camp on us set nothing.
+    camp_on_us = camp_maybe_us = camp_on_them_eff = 0.0
+    camp_threats = ()
+
     def __init__(self):
         self.ready = False
         self.round = 0
@@ -555,6 +562,8 @@ class World:
             self.allies = []
             self.visible_camps = []
             self.camp_damage_incoming = 0.0
+            self.camp_on_us = self.camp_maybe_us = self.camp_on_them_eff = 0.0
+            self.camp_threats = ()
             self.nearest_enemy = None
             self.prev_hp = None
             self.damage_taken = 0.0
@@ -746,6 +755,7 @@ class World:
 
     def _refresh_allies(self):
         self.allies = []
+        self.ally_units = []                     # (champion, tile, distance) for the camp target test
         self.ally_power = self.hp * self.strength
         self.ally_power_eff = self.my_ehp() * self.my_dmg()
         for champion in vision.champions(Team.ALLY):
@@ -758,6 +768,8 @@ class World:
             except Exception:
                 continue
             self.allies.append((pos, hp, strength, pos.chebyshev_distance(self.pos)))
+            if config.CAMP_POWER:
+                self.ally_units.append((champion, pos, self.allies[-1][3]))
             if pos.chebyshev_distance(self.pos) <= config.FIGHT_RANGE:
                 self.ally_power += hp * strength
                 dmg, ehp = strength, hp
@@ -831,11 +843,147 @@ class World:
         # Damage per turn from living camps that have us in reach (3 for wolves, 4 for elks and
         # golems, 5 for monoliths). They only hit when awake, so pair this with damage_taken.
         incoming = 0.0
+        in_reach = [] if config.CAMP_POWER else None
         for camp, gi, pos, hp in self.visible_camps:
             if hp > 0 and pos.chebyshev_distance(self.pos) <= self.groups[gi].attack_range:
                 g = self.groups[gi]
                 incoming += g.total_strength / max(g.n_camps, 1)
+                if in_reach is not None:
+                    in_reach.append((camp, gi, pos))
         self.camp_damage_incoming = incoming
+        if config.CAMP_POWER:
+            if in_reach and self.enemies:
+                self._refresh_camp_targets(in_reach)
+            elif self.camp_threats or self.camp_on_them_eff:
+                self.camp_on_us = self.camp_maybe_us = self.camp_on_them_eff = 0.0   # last turn's, cleared
+                self.camp_threats = ()
+
+    def _refresh_camp_targets(self, in_reach):
+        """Who the awake camps with us in reach will hit, for the fight rules (README: camp
+        targeting, measured).
+
+        A camp hits the champion nearest it by Chebyshev distance among those in its reach, either
+        team, chosen at the start of next round from where everyone ends this one. Champions that
+        already moved this round (has_completed_turn) are final; the rest can still close or open
+        CAMP_CLOSE_STEPS tiles (two more with a dash). So a camp group is on us for certain, maybe
+        on us (a tie or a later mover could change it), or on someone else. Our own tile is taken as
+        where we stand now. Not seen: a champion hidden in a bush beside the camp.
+
+        Fuel: native calls cost ~5-10K and Python loop iterations ~4-5K each here; a version that
+        scanned every awake camp in sight cost lanes 55K a contact turn on average (230K at worst).
+        So it runs only when a living camp has us in reach with an enemy in sight (in_reach, from
+        the loop above), makes one awake_camp_tiles call and one awake test per group, judges each
+        awake group once at its camp nearest us (CAMP_MAX_GROUPS at most) with the damage of all
+        its camps in reach, and only looks at champions close enough to matter.
+
+        camp_on_us / camp_maybe_us: damage a turn from camps surely / possibly on us.
+        camp_on_them_eff: the power (damage x CAMP_THREAT_TURNS x its damage) visible enemies lose
+        to these camps when an enemy is nearer them than we are, weighted CAMP_MAYBE_WEIGHT unless
+        that is certain.
+        camp_threats: tiles of the camps that are or may be on us (the flee step avoids them)."""
+        self.camp_on_us = self.camp_maybe_us = self.camp_on_them_eff = 0.0
+        self.camp_threats = []
+        if not in_reach or not self.enemies:
+            return
+        awake = vision.awake_camp_tiles()
+        px, py = self.pos.x, self.pos.y
+        groups = {}                              # group -> [x, y, our distance, reach, damage, tile]
+        asleep = set()                           # damage wakes a whole group: one test per group
+        for camp, gi, pos in in_reach:
+            if gi in asleep:
+                continue
+            if gi not in groups and not awake.is_set(pos):
+                asleep.add(gi)
+                continue
+            x, y = pos.x, pos.y
+            stats = _camp_tile_stats.get((x, y))
+            if stats is None:
+                try:
+                    design = camp.base_stats()
+                    stats = (float(design.base_strength), int(design.base_attack_range))
+                except Exception:
+                    continue
+                _camp_tile_stats[(x, y)] = stats
+            dmg, reach = stats
+            mine = max(abs(x - px), abs(y - py))
+            if dmg <= 0 or mine > reach:
+                continue                         # gem and gold clusters; a shorter reach than the group's
+            rec = groups.get(gi)
+            if rec is None:
+                groups[gi] = [x, y, mine, reach, dmg, pos]
+                continue
+            rec[4] += dmg
+            if reach > rec[3]:
+                rec[3] = reach
+            if mine < rec[2]:
+                rec[0], rec[1], rec[2], rec[5] = x, y, mine, pos
+        if not groups:
+            return
+        slack = config.CAMP_CLOSE_STEPS + 2      # the most a champion yet to move can close or open
+        judged = list(groups.values())
+        if len(judged) > CAMP_MAX_GROUPS:
+            judged.sort(key=lambda rec: rec[2])
+            judged = judged[:CAMP_MAX_GROUPS]
+        # A champion can only matter within a camp's reach plus slack of a camp that has us in
+        # reach: at most twice the longest reach plus slack from us.
+        others = self._camp_contenders(2 * max(rec[3] for rec in judged) + slack)
+        for x, y, mine, reach, dmg, pos in judged:
+            safe, sure = False, True
+            best, second, target = mine, 99, None
+            for o in others:
+                d = max(abs(o[0] - x), abs(o[1] - y))
+                if d < best:
+                    best, second, target = d, best, o
+                elif d < second:
+                    second = d
+                if safe or d > mine + slack:
+                    continue
+                if d + slack < mine:
+                    safe = True                  # nearer than we can be, whatever it does
+                    continue
+                moved = o[5]
+                if moved is None:
+                    try:
+                        moved = bool(o[2].has_completed_turn())
+                    except Exception:
+                        moved = False
+                    o[5] = moved
+                close = 0 if moved else o[6]
+                if d + close < mine:
+                    safe = True
+                elif d - close <= mine:
+                    sure = False                 # a tie or a later mover could take it either way
+            if not safe:
+                if sure:
+                    self.camp_on_us += dmg
+                else:
+                    self.camp_maybe_us += dmg
+                self.camp_threats.append(pos)
+            elif target is not None and target[4]:
+                # On an enemy nearer than us (an ally takes nothing off their side).
+                weight = 1.0 if second - best > slack and target[5] else config.CAMP_MAYBE_WEIGHT
+                self.camp_on_them_eff += weight * dmg * config.CAMP_THREAT_TURNS * target[3].dmg
+
+    def _camp_contenders(self, within):
+        """[x, y, champion, Enemy or None, in the balance, moved, tiles it may still close] per
+        visible champion other than us within `within` tiles; moved is filled in lazily (None until
+        asked). Allies come from the last ally scan (refreshed when enemies are in sight); enemies
+        the threat filters set aside (behind a wall, on their spawn) still draw camps, but only the
+        enemies in the balance can lose power to one."""
+        step, dash = config.CAMP_CLOSE_STEPS, config.CAMP_CLOSE_STEPS + 2
+        out = []
+        for e in self.enemies:
+            if e.dist <= within:
+                out.append([e.pos.x, e.pos.y, e.champion, e, True, None,
+                            dash if _kind_of.get(e.handle) in DASH_KINDS else step])
+        for e in self.distant_enemies:
+            if e.dist <= within:
+                out.append([e.pos.x, e.pos.y, e.champion, e, False, None,
+                            dash if _kind_of.get(e.handle) in DASH_KINDS else step])
+        for c, p, d in getattr(self, "ally_units", ()):
+            if d <= within:
+                out.append([p.x, p.y, c, None, False, None, dash if _kind_of.get(int(c)) in DASH_KINDS else step])
+        return out
 
     # ---- derived -----------------------------------------------------------------
     def team_gems_banked(self):
@@ -970,6 +1118,13 @@ class World:
             return self.power_balance_raw()
         if self.enemy_power_eff <= 0:
             return 99.0
+        if config.CAMP_POWER:
+            # Camps on us drain our side for CAMP_THREAT_TURNS turns, camps on them theirs (a camp
+            # that may be on us counts CAMP_MAYBE_WEIGHT). Floors keep the ratio defined.
+            on_us = self.camp_on_us + config.CAMP_MAYBE_WEIGHT * self.camp_maybe_us
+            ours = max(self.ally_power_eff - on_us * config.CAMP_THREAT_TURNS * self.my_dmg(), 0.05 * self.ally_power_eff)
+            theirs = max(self.enemy_power_eff - self.camp_on_them_eff, 0.05 * self.enemy_power_eff)
+            return config.POWER_CALIBRATION * ours / theirs
         return config.POWER_CALIBRATION * self.ally_power_eff / self.enemy_power_eff
 
     def power_balance_raw(self):
