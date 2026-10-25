@@ -1,12 +1,14 @@
 import json
+import sys
 import matplotlib.pyplot as plt
 import numpy as np
 from collections import defaultdict, namedtuple
 
 plt.style.use('seaborn-v0_8-dark')
 
+filename = sys.argv[1]
 match_data = None
-with open("./top team match on 01bigworld.json") as match_json:
+with open(filename) as match_json:
     match_data = json.load(match_json)
 
 WIDTH = match_data["match"]["width"]
