@@ -1,0 +1,648 @@
+{
+ "groups": [
+  {
+   "groupId": "5b2afe83-ff7c-4885-9830-2b830c1b19d0",
+   "team": "Pathfinders",
+   "teamId": "12aaa3a4-3ded-48ea-b737-8aa4287b0eb1",
+   "rating": 1740.6357286657303,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:00:49.265470+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "90cfef30-0600-4d7b-a514-e4ee53a964e6",
+   "team": "Pathfinders",
+   "teamId": "12aaa3a4-3ded-48ea-b737-8aa4287b0eb1",
+   "rating": 1740.6357286657303,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:00:51.803034+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "899e79e1-2856-4859-b2e8-5a8d2118ecc5",
+   "team": "Live Love Larp",
+   "teamId": "292625c5-0f3a-49f0-a08a-9757b8f58658",
+   "rating": 1737.110641133887,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:00:52.263446+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "4569616b-00fe-4759-b615-884328e358f7",
+   "team": "Live Love Larp",
+   "teamId": "292625c5-0f3a-49f0-a08a-9757b8f58658",
+   "rating": 1737.110641133887,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:00:55.927780+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "1d8f317d-be72-43f5-8527-d71714569084",
+   "team": "Serious-Wyso",
+   "teamId": "0c75a4f1-2e92-48e4-b1c1-384ddad80450",
+   "rating": 1730.6467004823471,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:00:56.325837+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "a4416a07-cd25-4dda-b971-49247496fe98",
+   "team": "Serious-Wyso",
+   "teamId": "0c75a4f1-2e92-48e4-b1c1-384ddad80450",
+   "rating": 1730.6467004823471,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:00:58.835098+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "b88bbbfc-67d0-4d26-8340-4e23109a6dac",
+   "team": "Memory?",
+   "teamId": "409129b9-e6ac-4f80-921c-2ede2ed1cb4f",
+   "rating": 1728.9454242142983,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:04.398864+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "09264ea4-597e-48bb-bcfb-cb4bf5ea6cdc",
+   "team": "Memory?",
+   "teamId": "409129b9-e6ac-4f80-921c-2ede2ed1cb4f",
+   "rating": 1728.9454242142983,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:05.041810+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "1d091df4-c541-42b1-aff9-be1fc47c58cd",
+   "team": "Turbo Gold Clusters",
+   "teamId": "4a0abab7-9cec-4e46-973e-61eda906c452",
+   "rating": 1723.8517792865962,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:05.701318+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "600b5170-df7d-4587-bee7-0b61a52c0bb1",
+   "team": "Turbo Gold Clusters",
+   "teamId": "4a0abab7-9cec-4e46-973e-61eda906c452",
+   "rating": 1723.8517792865962,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:06.217543+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "9bc3f2ff-fffc-4d55-b9d7-4273afc8c1ac",
+   "team": "German Empire Destroyers",
+   "teamId": "c5fe98e9-c795-4c67-a36b-2c66bac443e8",
+   "rating": 1719.4285210472672,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:10.437766+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "f3c20dde-97d8-4955-bd25-02ff7fce7130",
+   "team": "German Empire Destroyers",
+   "teamId": "c5fe98e9-c795-4c67-a36b-2c66bac443e8",
+   "rating": 1719.4285210472672,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:11.201995+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "c75f59c1-c1dd-464e-a862-0fa7789499f9",
+   "team": "#grrrrmonday",
+   "teamId": "8a509652-43f5-4ee8-92bc-16fa59563d2e",
+   "rating": 1713.8119302353984,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:12.127261+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "e2eb0a5c-9a22-4c4c-80ff-ee3c655720da",
+   "team": "#grrrrmonday",
+   "teamId": "8a509652-43f5-4ee8-92bc-16fa59563d2e",
+   "rating": 1713.8119302353984,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:16.085553+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "02cbeae2-dd29-495f-8d0b-4ce9889e357d",
+   "team": "5m",
+   "teamId": "13651eb3-dd0e-4e8a-a4e4-64820c2f5a72",
+   "rating": 1710.1035299131572,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:16.793008+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "77be5f37-f80c-4150-a0c4-7efaeea7fa33",
+   "team": "5m",
+   "teamId": "13651eb3-dd0e-4e8a-a4e4-64820c2f5a72",
+   "rating": 1710.1035299131572,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:21.465894+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "f9b3b3de-b82d-4bc0-8e7a-e18692196e03",
+   "team": "Rogue Lock Pickers",
+   "teamId": "ff9d7df3-6308-4dbd-a440-40835248d86a",
+   "rating": 1707.1473647285366,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:22.421392+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "ede1a9e5-7a30-4380-93db-5cf18e350874",
+   "team": "Rogue Lock Pickers",
+   "teamId": "ff9d7df3-6308-4dbd-a440-40835248d86a",
+   "rating": 1707.1473647285366,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:23.056630+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "a06b99ec-ac72-4fff-a100-80366eec24c1",
+   "team": "DiscordMess",
+   "teamId": "f65081ab-16d8-421c-9ae7-654b22cd4bd1",
+   "rating": 1703.5467991411156,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:26.507351+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "acbef820-cbbb-4691-a862-9204db011889",
+   "team": "DiscordMess",
+   "teamId": "f65081ab-16d8-421c-9ae7-654b22cd4bd1",
+   "rating": 1703.5467991411156,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:28.139293+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "42a882a2-6260-4089-bd25-5bfa137c3902",
+   "team": "Dota2 is better than LOL",
+   "teamId": "bf820f6c-c1ac-47e4-911f-71cf3f5fd9f5",
+   "rating": 1699.563168706762,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:28.956506+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "69cebac0-6fe9-4b45-8a77-29255cb10a29",
+   "team": "Dota2 is better than LOL",
+   "teamId": "bf820f6c-c1ac-47e4-911f-71cf3f5fd9f5",
+   "rating": 1699.563168706762,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:30.483123+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "deed0972-70cf-49fd-b3da-d73340febc12",
+   "team": "Milk and Potatoes",
+   "teamId": "246f9cef-b416-4864-964e-ebcafb97f7ad",
+   "rating": 1695.7765718953788,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:37.215641+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "28987154-1a7c-489d-b8a8-4b83e524ebe7",
+   "team": "Milk and Potatoes",
+   "teamId": "246f9cef-b416-4864-964e-ebcafb97f7ad",
+   "rating": 1695.7765718953788,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:37.752746+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "405df2d0-6549-4e9c-8c3d-d0d87c58a7e1",
+   "team": "HighCortisol",
+   "teamId": "58271d23-d86a-48de-987a-5d82c983d7db",
+   "rating": 1692.7235000289693,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:38.508512+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "286934e3-8755-44e9-86f2-c4d9fcbd163f",
+   "team": "HighCortisol",
+   "teamId": "58271d23-d86a-48de-987a-5d82c983d7db",
+   "rating": 1692.7235000289693,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:39.399373+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "0811150e-c297-4c14-9e6c-e1d6cb872c82",
+   "team": "BitShift",
+   "teamId": "fe852ad6-1ff3-4415-8c6b-0fbb65c4a9b8",
+   "rating": 1688.3694687454329,
+   "maps": [
+    "00fragment",
+    "01corridors",
+    "00packs",
+    "00collision",
+    "00swirl"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:40.510362+00:00",
+   "label": "v14",
+   "done": true
+  },
+  {
+   "groupId": "1d9fabcc-a1fe-48f7-92f0-abc82080f3d2",
+   "team": "BitShift",
+   "teamId": "fe852ad6-1ff3-4415-8c6b-0fbb65c4a9b8",
+   "rating": 1688.3694687454329,
+   "maps": [
+    "00eight",
+    "01hooks",
+    "00corners",
+    "01starfish",
+    "00expanse"
+   ],
+   "sides": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "a"
+   ],
+   "created": "2026-10-21T23:01:44.578985+00:00",
+   "label": "v14",
+   "done": true
+  }
+ ]
+}
