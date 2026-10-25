@@ -98,7 +98,7 @@ pub fn call(name: &str, a: &[usize]) -> i64 {
                             submit_gems_range: 1,
                             max_rounds: 2000,
                             winning_gems: 1000,
-                            kill_gold: 50,
+                            kill_gold: 100,
                             assist_gold: 10,
                             passive_gold: 0,
                             spawn_healing: 1.0,
@@ -181,9 +181,6 @@ pub fn call(name: &str, a: &[usize]) -> i64 {
                     msg.len() as i64
                 }
                 "champion_ability_props" => {
-                    if s.hidden && a[0] == 2 {
-                        return 97;
-                    }
                     put(a[2], props(if a[1] == 0 { 2 } else { 7 }));
                     0
                 }
@@ -216,6 +213,16 @@ pub fn call(name: &str, a: &[usize]) -> i64 {
                                 ..Default::default()
                             },
                             ..Default::default()
+                        },
+                    );
+                    0
+                }
+                "champion_identity" => {
+                    put(
+                        a[1],
+                        sys::ChampionIdentity {
+                            team: if a[0] == 2 { 1 } else { 0 },
+                            kind: 0,
                         },
                     );
                     0
@@ -311,6 +318,22 @@ pub fn call(name: &str, a: &[usize]) -> i64 {
                 }
                 "wards" => write_list(a, &s.wards),
                 "teleports" => write_list(a, &s.teleports),
+                "teleport_at" => {
+                    if a[0] >= 8 || a[1] >= 8 {
+                        return 96;
+                    }
+                    match s
+                        .teleports
+                        .iter()
+                        .find(|t| t.destination.x == a[0] as i32 && t.destination.y == a[1] as i32)
+                    {
+                        Some(t) => {
+                            put(a[2], *t);
+                            0
+                        }
+                        None => 98,
+                    }
+                }
                 "altar_locks" => write_list(a, &s.locks),
                 "ward_at" | "ally_ward_at" | "enemy_ward_at" | "camp_at" | "champion_at" => {
                     if a[0] >= 8 || a[1] >= 8 {
@@ -334,6 +357,7 @@ pub fn call(name: &str, a: &[usize]) -> i64 {
                             y: 2,
                             timer: -1,
                             disabled: 1,
+                            owner: 0,
                         },
                     );
                     0
@@ -396,18 +420,10 @@ pub fn call(name: &str, a: &[usize]) -> i64 {
                     0
                 }
                 "map_num_camp_groups" => {
-                    if s.draft {
-                        return 94;
-                    }
                     put(a[0], 1u32);
                     0
                 }
-                "map_camp_groups" => {
-                    if s.draft {
-                        return 94;
-                    }
-                    write_truncated(a, &[5u32])
-                }
+                "map_camp_groups" => write_truncated(a, &[5u32]),
                 "map_camp_group" => {
                     put(a[1], sys::CampGroupInfo { gems: 4, gold: 10 });
                     0
@@ -432,6 +448,18 @@ pub fn call(name: &str, a: &[usize]) -> i64 {
                     );
                     0
                 }
+                "map_camp_layout" => write_truncated(a, &[5u32, 10, 4, 30, 2, 10, 2, 3, 3, 11, 2, 4, 3]),
+                "map_camp_group_of" => {
+                    put(a[1], 5u32);
+                    0
+                }
+                "map_camp_at" => match (a[0], a[1]) {
+                    (3, 3) | (4, 3) => {
+                        put(a[2], if a[0] == 3 { 10u32 } else { 11 });
+                        0
+                    }
+                    _ => 98,
+                },
                 "camp_group_state" => {
                     put(a[1], s.group_state);
                     0
@@ -508,6 +536,11 @@ pub fn call(name: &str, a: &[usize]) -> i64 {
                     put(*a.last().unwrap() + 8, 0u64);
                     0
                 }
+                "board_awake_camp_occupancy" | "board_asleep_camp_occupancy" => {
+                    put(a[0], if name == "board_awake_camp_occupancy" { 1u64 << 9 } else { 1u64 << 18 });
+                    put(a[0] + 8, 0u64);
+                    0
+                }
                 "board_ally_occupancy"
                 | "board_enemy_occupancy"
                 | "board_camp_occupancy"
@@ -540,6 +573,9 @@ pub fn call(name: &str, a: &[usize]) -> i64 {
                 | "debug_dot"
                 | "debug_line"
                 | "resign"
+                | "fuel_pause"
+                | "fuel_resume"
+                | "fuel_adjust"
                 | "yield" => 0,
                 "bc_Bitboard_One" => {
                     put(a[0], u64::MAX);
@@ -632,6 +668,19 @@ pub fn call(name: &str, a: &[usize]) -> i64 {
                         (a[0], a[1])
                     };
                     std::ptr::copy_nonoverlapping(src as *const u8, dst as *mut u8, a[2]);
+                    0
+                }
+                "bc_DistanceField_Copy" => {
+                    std::ptr::copy(a[0] as *const u16, a[1] as *mut u16, 64);
+                    0
+                }
+                "bc_DistanceField_CopyWithMask" => {
+                    let bits = *(a[1] as *const u64);
+                    for bit in 0..64 {
+                        if bits & (1u64 << bit) != 0 {
+                            (a[2] as *mut u16).add(bit).write(*(a[0] as *const u16).add(bit));
+                        }
+                    }
                     0
                 }
                 "bc_DistanceField_Get" | "bc_DistanceField_Set" => {
