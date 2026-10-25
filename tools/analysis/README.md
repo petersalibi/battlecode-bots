@@ -89,6 +89,8 @@ band (one value an hour, free submissions) and the ladder decide between survivo
 | `fightstats.py <base> raw ladder teto\|opp <out>` | Contact turns (enemy within 4): attack/cast/move/idle rates, damage traded, focus, per champion |
 | `contact_modes.py <base>` | Our contact turns split by our mode: where the attack rate goes (flee was 36% of contact at 1.7% attacks) |
 | `flee_turns.py <base>` | Our flee-mode contact turns: chaser distance and class, hp band, hits, deaths within 5 |
+| `mirror_check.py <run dir>` | Which maps of a run_matches batch mirror exactly (bot vs a copy with dormant code or a fuel burn): the phase-1 test for fuel-independent behaviour |
+| `review_metrics.py label=path[@selector] ...` | The review's scorecard for any dumps (ladder, top ten, local batches): deaths a game, contact share, health when stepping away, allies and enemies within 5 at death, ally within 4, wards. True positions, not fogged |
 | `cornered.py <base>` | Melee body with a melee enemy adjacent: flee vs fight outcomes by hp band and escape distance (source of the stand knobs) |
 
 These were written fast during the investigation. They work, but expect hardcoded team names

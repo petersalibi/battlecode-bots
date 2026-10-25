@@ -4,6 +4,14 @@ Written 2026-10-21, after submission 7. Deadline early November 2026. Team work 
 shared blocks, escorts) is deliberately last: everything here improves one body's own decisions,
 in the order they sit behind the main decision, the mode selector.
 
+## Update 2026-10-25: the redesign (samit-sucks)
+
+An external review found the plateau structural (no map picture beyond sight, no plan beyond the
+turn, behaviour that depended on fuel left). The rebuild happens in `bots/samit-sucks` in phases;
+see `docs/REDESIGN.md` for the record and `bots/samit-sucks/README.md` for status. Phase 1 is done:
+no decision reads fuel any more (40/40 maps mirror under a fuel burn, v42 2/40), 4 exhaustions in
+80 games (v42 54). `hybrid` stays the live submission until samit-sucks beats it.
+
 ## Update 2026-10-22: v12 to v33 (read this first)
 
 The sections below this one were written for v7 to v11. Since then the work moved from the
