@@ -1,396 +1,114 @@
-"""Draft phase: pick champions and write the opening plan into draft memory.
-
-The first draft turn has 10x fuel and sees the whole map. A safe pick is locked in before any
-analysis, because a missed pick is chosen at random.
-"""
-import cambc
+"""Draft: lock a pick in first (a missed pick is random), then, on our first draft turn (100x fuel),
+build the map model (plan.py) and leave it in draft memory. Later turns carry it over."""
 import _cambc
+import cambc
 from cambc import game_map
 
 import config
-import draft_features
-import macro
-import memory_codec
-import nn
-import weights
+import plan
 
 Team = cambc.Team
 Draft = cambc.ChampionDraft
-
-# Shard stat per draft pick; Cassi & Issac are two bodies (focus caster, strength melee).
-_STAT_CODE = {"STRENGTH": 0, "FOCUS": 1, "HEALTH": 2}
-
-
-def _priority():
-    return [getattr(Draft, name) for name in config.DRAFT_PRIORITY]
+Bitboard = cambc.Bitboard
+DistanceField = cambc.DistanceField
+UNREACHABLE = 60000          # field values at or above this are unreached
 
 
-def _map_is_small():
-    return game_map.width() * game_map.height() < config.SMALL_MAP_TILES
-
-
-def _dash_map():
-    """True when holes wall most camps off from our spawn: with holes as walls fewer than half as
-    many camps are within MAX_CAMP_TURNS as with the thin (dash-crossable) holes passable. Costs
-    about 1.8M fuel (two fields and the camp groups), so only on the first draft turn, which has
-    ten times the budget; later turns read the flag back from the plan."""
-    try:
-        previous = memory_codec.decode_plan(bytes(cambc.DraftMemoryBuffer()))
-        if previous["team_size"]:
-            return previous["dash_map"]
-    except Exception:
-        pass
-    if _cambc.fuel_remaining() < config.DASH_MAP_FUEL:
-        return False
-    try:
-        Bitboard, DistanceField = cambc.Bitboard, cambc.DistanceField
-        walls, holes = game_map.walls(), game_map.holes()
-        if holes.is_empty():
-            return False
-        camp_tiles = Bitboard()
-        for group in game_map.camp_groups():
-            for camp in group.camps():
-                camp_tiles.set(camp.spawn_position(), True)
-        blocked = walls | holes | game_map.altars() | game_map.spawn_region(cambc.Team.ENEMY) | camp_tiles
-        walk = ~blocked
-        thin = Bitboard()
-        for dx, dy in ((1, 0), (0, 1), (1, 1), (1, -1)):
-            a = walk
-            b = walk
-            if dx:
-                a = a.shift_right(dx)
-                b = b.shift_right(-dx)
-            if dy:
-                a = a.shift_up(dy)
-                b = b.shift_up(-dy)
-            thin |= holes & a & b
-        if thin.is_empty():
-            return False
-        spawn = game_map.spawn_region(cambc.Team.ALLY)
-        reach = config.MAX_CAMP_TURNS + 1
-        width, height = game_map.width(), game_map.height()
-
-        def camps_within(board):
-            field = DistanceField()
-            field.compute(board, spawn, Bitboard(), reach)
-            count = 0
-            for tile in camp_tiles.positions():
-                for dx in (-1, 0, 1):
-                    for dy in (-1, 0, 1):
-                        x, y = tile.x + dx, tile.y + dy
-                        if (dx or dy) and 0 <= x < width and 0 <= y < height and field.get(cambc.Vec2(x, y)) <= reach:
-                            count += 1
-                            break
-                    else:
-                        continue
-                    break
-            return count
-
-        walking = camps_within(blocked)
-        dashing = camps_within(blocked & ~thin)
-        print(f"draft: camps within {reach} turns: walking {walking}, with dashes {dashing}", flush=True)
-        return dashing >= config.DASH_MAP_RATIO * max(walking, 1) or walking == 0
-    except Exception as error:
-        print(f"draft: dash map check failed: {error!r}", flush=True)
-        return False
-
-
-def _map_info():
-    """MapInfo from the engine: whole-map bitboards and four fields, about 6M fuel, so only on
-    the first draft turn (25M). Mirrors tools/build_draft_dataset.map_info."""
-    Bitboard, DistanceField, Vec2 = cambc.Bitboard, cambc.DistanceField, cambc.Vec2
-    info = draft_features.MapInfo()
-    W, H = game_map.width(), game_map.height()
-    info.width, info.height = W, H
-    info.team_size = cambc.draft.team_size()
-    walls, holes, bushes, altars = game_map.walls(), game_map.holes(), game_map.bushes(), game_map.altars()
-    info.walls, info.holes, info.bushes = walls.count(), holes.count(), bushes.count()
-    groups = game_map.camp_groups()
-    info.n_groups = len(groups)
-    camp_tiles = Bitboard()
-    camp_list = []                       # one tile per group: the counts below are groups in reach
-    for group in groups:
-        info.total_gems += group.gem_value()
-        info.total_gold += group.gold_value()
-        first = True
-        for camp in group.camps():
-            pos = camp.spawn_position()
-            camp_tiles.set(pos, True)
-            if first:
-                camp_list.append(pos)
-                first = False
-            kind = camp._type
-            if 0 <= kind < draft_features.N_KINDS:
-                info.kind_counts[kind] += 1
-    ours, theirs = game_map.spawn_region(Team.ALLY), game_map.spawn_region(Team.ENEMY)
-    blocked = walls | holes | altars | camp_tiles | theirs
-    field = DistanceField()
-    field.compute(blocked, ours, Bitboard(), 61)
-
-    def camps_within(fld, limit):
-        # Groups whose first camp has a cardinal neighbour within `limit` walking turns: four
-        # field reads per group, about 0.5M on the biggest maps (eight per camp was 7M).
-        n = 0
-        for pos in camp_list:
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                x, y = pos.x + dx, pos.y + dy
-                if 0 <= x < W and 0 <= y < H and fld.get(Vec2(x, y)) <= limit:
-                    n += 1
-                    break
-        return n
-    info.camps_within_30 = camps_within(field, 30)
-    info.camps_within_60 = camps_within(field, 60)
-    if holes.is_empty():
-        info.camps_within_60_dash = info.camps_within_60
-    else:
-        walk = ~blocked
-        thin = Bitboard()
-        for dx, dy in ((1, 0), (0, 1), (1, 1), (1, -1)):
-            a = walk
-            b = walk
-            if dx:
-                a = a.shift_right(dx)
-                b = b.shift_right(-dx)
-            if dy:
-                a = a.shift_up(dy)
-                b = b.shift_up(-dy)
-            thin |= holes & a & b
-        if thin.is_empty():
-            info.camps_within_60_dash = info.camps_within_60
-        else:
-            dash_field = DistanceField()
-            dash_field.compute(blocked & ~thin, ours, Bitboard(), 61)
-            info.camps_within_60_dash = camps_within(dash_field, 60)
-    # Spawn to spawn and spawn to the nearest altar: a field from our spawn with the enemy
-    # spawn and the altars left passable as goals, read next to them.
-    full = DistanceField()
-    full.compute(walls | holes | altars | camp_tiles, ours, Bitboard())
-    best = 65535
-    for tile in theirs.positions():
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                x, y = tile.x + dx, tile.y + dy
-                if 0 <= x < W and 0 <= y < H:
-                    v = full.get(Vec2(x, y))
-                    if v < best:
-                        best = v
-    info.spawn_turns = 0 if best >= 65535 else best
-    best = 65535
-    for tile in altars.positions():
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                if dx or dy:
-                    x, y = tile.x + dx, tile.y + dy
-                    if 0 <= x < W and 0 <= y < H:
-                        v = full.get(Vec2(x, y))
-                        if v < best:
-                            best = v
-    info.altar_turns = 0 if best >= 65535 else best
-    return info
-
-
-def _map_features():
-    """The draft head's map part: from the plan on later turns, from the engine on the first."""
-    try:
-        previous = memory_codec.decode_plan(bytes(cambc.DraftMemoryBuffer()))
-        if previous["team_size"] and previous.get("map_features"):
-            return previous["map_features"]
-    except Exception:
-        pass
-    if not (config.USE_NN_DRAFT or config.USE_NN_DRAFT_VALUE or config.DRAFT_LOG_FEATURES):
-        return None
-    if _cambc.fuel_remaining() < config.DRAFT_HEAD_FUEL:
-        return None
-    try:
-        feats = draft_features.map_part(_map_info())
-        print("draft: map features done, %d fuel left" % _cambc.fuel_remaining(), flush=True)
-        print("draftlog pick=0 map=%s" % "".join("%02x" % v for v in feats), flush=True)
-        return feats
-    except Exception as error:
-        print(f"draft: map features failed: {error!r}", flush=True)
-        return None
-
-
-def _explore_pick(available, chosen):
-    """Self-play exploration: with probability DRAFT_RANDOM, a random allowed champion. The
-    generator is seeded from the salt, the map and our spawn, so a sweep is reproducible and the
-    next salt explores differently."""
-    if config.DRAFT_RANDOM <= 0:
-        return None
-    try:
-        spawn = game_map.spawn_region(Team.ALLY).positions()
-        anchor = spawn[0] if spawn else cambc.Vec2(0, 0)
-        state = (config.DRAFT_RANDOM_SALT * 1000003 + game_map.width() * 131 + game_map.height() * 7
-                 + anchor.x * 17 + anchor.y * 29 + len(chosen) * 1009) & 0x7FFFFFFF
-
-        def rnd():
-            nonlocal state
-            state = (state * 1103515245 + 12345) & 0x7FFFFFFF
-            return state >> 8
-        if (rnd() % 1000) / 1000.0 >= config.DRAFT_RANDOM:
-            return None
-        allowed = [getattr(Draft, n) for n in config.DRAFT_ALLOWED if getattr(Draft, n, None) in available]
-        if not allowed:
-            return None
-        return allowed[rnd() % len(allowed)]
-    except Exception:
-        return None
-
-
-def _plan_draft(map_feats, chosen):
-    """The whole draft, greedily by the draft value head, on the first draft turn (later turns
-    have a tenth of the fuel and read the plan back): at each step the allowed champion whose
-    addition gives the highest predicted gem margin for the full composition. Stops early when
-    fuel runs short; the list fills the rest."""
-    net = weights.DRAFT_VALUE if config.USE_NN_DRAFT_VALUE else None
-    if net is None or map_feats is None:
-        return []
-    try:
-        size = cambc.draft.team_size()
-        picks = list(chosen)
-        allowed_all = [getattr(Draft, n) for n in config.DRAFT_ALLOWED if getattr(Draft, n, None) is not None]
-        while len(picks) < size:
-            if _cambc.fuel_remaining() < config.DRAFT_VALUE_FUEL:
-                break
-            best, best_value = None, None
-            for pick in allowed_all:
-                if pick in picks:
-                    continue
-                value = net.forward(draft_features.build(map_feats, picks + [pick], size))[0]
-                if best is None or value > best_value:
-                    best, best_value = pick, value
-            if best is None:
-                break
-            picks.append(best)
-        return picks[len(chosen):]
-    except Exception as error:
-        print(f"draft: value head failed: {error!r}", flush=True)
-        return []
-
-
-def _value_pick(available, map_feats, chosen):
-    """This turn's pick from the planned draft (planned on the first turn, carried in the plan)."""
-    try:
-        previous = memory_codec.decode_plan(bytes(cambc.DraftMemoryBuffer()))
-        planned = previous.get("planned_picks") or []
-    except Exception:
-        planned = []
-    if not planned:
-        planned = list(chosen) + _plan_draft(map_feats, chosen)
-        _PLANNED[:] = planned
-    else:
-        _PLANNED[:] = planned
-    index = len(chosen)
-    if index < len(planned) and planned[index] in available:
-        return planned[index]
+def _pick():
+    chosen = set(int(p) for p in cambc.draft.current_draft(Team.ALLY))
+    for name in config.DRAFT_PRIORITY:
+        pick = getattr(Draft, name, None)
+        if pick is not None and int(pick) not in chosen:
+            return pick
+    for pick in range(config.N_DRAFT_PICKS):
+        if pick not in chosen:
+            return pick
     return None
 
 
-_PLANNED = []
+def _ring(tiles, blocked, width, height):
+    """Walkable tiles touching any of tiles (a group is entered from beside it)."""
+    ring = Bitboard()
+    tmp = Bitboard()
+    for t in tiles:
+        tmp.clear()
+        tmp.draw_chebyshev(t, 1)
+        ring |= tmp
+    return ring & ~blocked
 
 
-def _net_pick(available, map_feats, chosen):
-    """The draft head's pick among the available, allowed champions, or None."""
-    net = weights.DRAFT_HEAD if config.USE_NN_DRAFT else None
-    if net is None or map_feats is None:
-        return None
-    try:
-        x = draft_features.build(map_feats, list(chosen), len(chosen))
-        scores = net.forward(x)
-        allowed_names = set(config.DRAFT_ALLOWED)
-        mask = [p in available and any(getattr(Draft, n, -1) == p for n in allowed_names) for p in range(config.N_DRAFT_PICKS)]
-        if sum(mask) < 1:
-            return None
-        if nn.margin(scores, mask) < getattr(weights, "DRAFT_HEAD_MARGIN", 0):
-            return None
-        return nn.masked_argmax(scores, mask)
-    except Exception as error:
-        print(f"draft: head failed: {error!r}", flush=True)
-        return None
+def _min_over(field, tiles):
+    best = UNREACHABLE
+    for t in tiles:
+        v = field.get(t)
+        if v < best:
+            best = v
+    return best
 
 
-def _choose(available, small_map, dash_map=False):
-    """Scripted pick: priority order, nudged by map size. Replace with a network later."""
-    order = _priority()
-    if dash_map:
-        front = [getattr(Draft, name) for name in config.DASH_DRAFT_PRIORITY]
-        order = front + [pick for pick in order if pick not in front]
-    if small_map:
-        # Small maps mean fights: prefer the tanks and stun-immune Marcella a little earlier.
-        for name in ("MARCELLA", "RYTH"):
-            pick = getattr(Draft, name)
-            if pick in order:
-                order.remove(pick)
-                order.insert(1, pick)
-    for pick in order:
-        if pick in available:
-            return pick
-    return available[0]
+def build_plan():
+    width, height = game_map.width(), game_map.height()
+    groups = game_map.camp_groups()
+    camp_tiles = Bitboard()
+    tile_lists = []
+    for g in groups:
+        tiles = g.spawn_tiles()
+        camp_tiles |= tiles
+        tile_lists.append(tiles.positions())
+    altar_board = game_map.altars()
+    ours, theirs = game_map.spawn_region(Team.ALLY), game_map.spawn_region(Team.ENEMY)
+    blocked = game_map.walls() | game_map.holes() | altar_board | camp_tiles
+    rings = [_ring(tl, blocked, width, height).positions() for tl in tile_lists]
+    n = len(groups)
 
+    def field_from(roots, walls):
+        f = DistanceField()
+        f.compute(walls, roots, Bitboard())
+        return f
 
-def _body_stats(picks):
-    stats = []
-    for pick in picks:
-        if pick == Draft.CASSI_AND_ISSAC:
-            stats.append(_STAT_CODE[config.BUILD_STAT["CASSI"]])
-            stats.append(_STAT_CODE[config.BUILD_STAT["ISSAC"]])
-        else:
-            name = next(n for n in config.BUILD_STAT if getattr(Draft, n, None) == pick)
-            stats.append(_STAT_CODE[config.BUILD_STAT[name]])
-    return stats
-
-
-def _macro_plan(team_size):
-    """The macro plan: made on our first draft turn (ten times the fuel), carried over after."""
-    if not config.MACRO:
-        return None
-    try:
-        previous = memory_codec.decode_plan(bytes(cambc.DraftMemoryBuffer()))
-        if previous["team_size"] and previous["macro"][:2] == macro.MAGIC:
-            return previous["macro"]
-    except Exception:
-        pass
-    if _cambc.fuel_remaining() < config.MACRO_FUEL:
-        return None
-    try:
-        before = _cambc.fuel_remaining()
-        out = macro.plan(team_size)
-        print("draft: macro plan %d bytes, %d fuel" % (len(out), before - _cambc.fuel_remaining()), flush=True)
-        return out
-    except Exception as e:
-        print("draft: macro plan failed: %r" % (e,), flush=True)
-        return None
+    f_us = field_from(ours, blocked | theirs)
+    f_them = field_from(theirs, blocked | ours)
+    spawn = [plan.cap(_min_over(f_us, r), UNREACHABLE) for r in rings]
+    side = [0] * n
+    for i, r in enumerate(rings):
+        a, b = _min_over(f_us, r), _min_over(f_them, r)
+        side[i] = 0 if a >= UNREACHABLE or b >= UNREACHABLE else max(-127, min(127, b - a))
+    altars = altar_board.positions()
+    altar = [255] * n
+    altar_turns = [plan.FAR] * n
+    for ai, a in enumerate(altars):
+        f = field_from(_ring([a], blocked, width, height), blocked | theirs)
+        for i, r in enumerate(rings):
+            t = plan.cap(_min_over(f, r), UNREACHABLE)
+            if t < altar_turns[i]:
+                altar[i], altar_turns[i] = ai, t
+    pairs = [[plan.FAR] * n for _ in range(n)]
+    for a in range(n):
+        if not rings[a]:
+            continue
+        roots = Bitboard()
+        for t in rings[a]:
+            roots.set(t, True)
+        f = field_from(roots, blocked | theirs)
+        for b in range(a + 1, n):
+            t = plan.cap(_min_over(f, rings[b]), UNREACHABLE)
+            pairs[a][b] = pairs[b][a] = t
+    return plan.encode(spawn, side, altar, altar_turns, pairs)
 
 
 def play():
-    chosen = cambc.draft.current_draft(Team.ALLY)
-    available = [pick for pick in range(config.N_DRAFT_PICKS) if pick not in chosen]
-    if not available:
+    pick = _pick()
+    if pick is not None:
+        cambc.draft.pick(pick)
+    previous = bytes(cambc.DraftMemoryBuffer())
+    if previous[:2] == plan.MAGIC:
+        cambc.draft_memory.submit(previous)
         return
-    small_map = _map_is_small()
-    dash_map = _dash_map()
-    map_feats = _map_features()
-
-    # Lock in a pick first, then spend the remaining fuel on the plan.
-    pick = _explore_pick(available, chosen)
-    source = "random"
-    if pick is None:
-        pick = _value_pick(available, map_feats, chosen)
-        source = "value"
-    if pick is None:
-        pick = _net_pick(available, map_feats, chosen)
-        source = "head"
-    if pick is None:
-        pick = _choose(available, small_map, dash_map)
-        source = "list"
-    cambc.draft.pick(pick)
-
-    picks = list(chosen) + [pick]
-    team_size = cambc.draft.team_size()
-    aggression = 170 if small_map else 90
-    plan_bytes = _macro_plan(team_size)
-    plan = memory_codec.encode_plan(team_size, aggression, small_map, _body_stats(picks), dash_map, map_feats, _PLANNED,
-                                    plan_bytes)
-    cambc.draft_memory.submit(plan)
-    print(f"draft: round {len(picks)}/{team_size} picked {Draft.to_string(pick) if hasattr(Draft, 'to_string') else pick} ({source})",
-          flush=True)
+    before = _cambc.fuel_remaining()
+    try:
+        raw = build_plan()
+    except Exception as e:
+        print("draft: plan failed: %r" % (e,), flush=True)
+        return
+    cambc.draft_memory.submit(raw)
+    print("draft: plan %d bytes, %d fuel" % (len(raw), before - _cambc.fuel_remaining()), flush=True)
