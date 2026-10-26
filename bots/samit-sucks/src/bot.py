@@ -1,5 +1,6 @@
 """One body's turn: perceive, review the job on an event, one tactical evaluation, publish."""
 import _cambc
+import cambc
 
 import board
 import config
@@ -20,6 +21,7 @@ class Bot:
         self.fuel_total = self.fuel_turns = self.fuel_max = 0
         self.stats = {}                  # turns per job kind and outcome counters (logs only)
         self.prev_gems = 0
+        self.pos1 = self.pos2 = None       # where we stood one and two turns ago (stall counts)
 
     def play_turn(self):
         w = self.w
@@ -67,11 +69,14 @@ class Bot:
             return
         if w.at_spawn:
             tactics.shop(w)
+        t1 = _fuel()
         why = self.market.needs_review()
         if why is not None:
             self.market.choose()
         w.job_group = self.market.job.group
+        t2 = _fuel()
         self.tactics.run()
+        self.t_parts = (t1 - t2, t2 - _fuel())
         st = self.stats
         job = self.market.job
         key = job.kind if job is not None else "none"
@@ -80,6 +85,13 @@ class Bot:
             st["hit"] = st.get("hit", 0) + 1
         if "hold" in self.tactics.trace:
             st["hold"] = st.get("hold", 0) + 1
+        elif key == M.FARM and not self.tactics.attacked:
+            here = (w.x, w.y)
+            if here == self.pos2:
+                st["pace"] = st.get("pace", 0) + 1         # back where we stood two turns ago
+            elif not w.moved and here == self.pos1:
+                st["still"] = st.get("still", 0) + 1
+        self.pos2, self.pos1 = getattr(self, "pos1", None), (w.x, w.y)
         if w.gems > self.prev_gems:
             st["gathered"] = st.get("gathered", 0) + w.gems - self.prev_gems
         elif w.gems < self.prev_gems:
@@ -96,13 +108,20 @@ class Bot:
         if config.TRACE_SLOT == w.slot and self.market.job is not None:
             job = self.market.job
             f = None
+            if job.kind == M.HOME and w.spawn_field is not None:
+                b = self.paths.blocked()
+                near = [(t.x, t.y, self.paths.get(w.spawn_field, t), int(b.is_set(t)))
+                        for t in w.spawn_ally.positions()[:6]]
+                units = [(t.x, t.y) for t in cambc.vision.champion_tiles().positions()]
+                print("home here=%d at_spawn=%s spawn=%s units=%s" % (self.paths.get(w.spawn_field, w.pos), w.at_spawn,
+                                                                       near, units), flush=True)
             if job.kind == M.FARM:
-                f = self.paths.fields.get(("g", job.group.index)) if job.group.state != world.REWARD else                     self.paths.fields.get(("c", job.group.index))
+                f = self.paths.fields.get(("g", job.group.index, w.attack_range)) if job.group.state != world.REWARD else                     self.paths.fields.get(("c", job.group.index))
             print("t r%d %d,%d %r st=%s fld=%s hp=%d camps=%d enemies=%d att=%s cast=%s%s fuel=%d refresh=%d prof=%s" % (
                 w.round, w.x, w.y, job, job.group.state if job.group is not None else "-",
                 self.paths.get(f, w.pos) if f is not None else None, int(w.hp),
                 len(w.camps), len(w.enemies), self.tactics.attacked, self.tactics.cast, self.tactics.trace, used,
-                self.t_refresh, None),
+                self.t_refresh, (self.t_parts, getattr(self.market, 'prof', None))),
                 flush=True)
         self.fuel_total += used
         self.fuel_turns += 1

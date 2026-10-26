@@ -1,5 +1,7 @@
 # samit-sucks v2: design
 
+Status, test commands and the open problems are in `README.md`.
+
 A new bot, written from scratch on 2026-10-26 for engine 2.0.0. The old samit-sucks (hybrid plus
 the redesign phases) is tagged `samit-sucks-v1`; its 3a state (the one measured gain) is
 `samit-sucks-3a`. Nothing of hybrid's decision code is carried over.

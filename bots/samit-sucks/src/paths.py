@@ -50,10 +50,28 @@ class Paths:
             out |= tmp
         return out & ~self.w.blocked
 
-    def to_group(self, g):
+    def to_group(self, g, radius=None):
         """Walking turns to stand within our attack range of group g (its camps are walls while
         alive): beside it for melee, three tiles off for ranged bodies."""
-        return self._field(("g", g.index), self.ring(g.tile_list, self.w.attack_range), self.w.blocked)
+        r = self.w.attack_range if radius is None else radius
+        return self._field(("g", g.index, r), self.ring(g.tile_list, r), self.w.blocked)
+
+    def near_tiles(self, points, radius, reach=12):
+        """A small uncached field to tiles within radius of points (x, y), around what blocks us
+        this turn; explored at most `reach` steps out."""
+        roots = Bitboard()
+        tmp = Bitboard()
+        for x, y in points:
+            tmp.clear()
+            tmp.draw_chebyshev(cambc.Vec2(x, y), radius)
+            roots |= tmp
+        walls = self.blocked()
+        roots = roots & ~walls
+        if roots.is_empty():
+            return None
+        f = DistanceField()
+        f.compute(walls, roots, Bitboard(), reach)
+        return f
 
     def onto_group(self, g):
         """Walking turns to stand on one of group g's tiles (to capture it)."""

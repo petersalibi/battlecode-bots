@@ -8,7 +8,7 @@ Python bots for Cambridge Battlecode 2026 (event cambc2026a). The deadline is ar
 - `docs/NEURAL_NET_GUIDE.md`: the agreed design for neural networks in the bot (hybrid: scripted bot, decisions as scoring functions in `decide.py`, small packed-int8 networks swapped in behind them; the first is the 64→32→16→6 mode selector).
 - `bots/fuelbench/RESULTS.md`: measured fuel costs in release builds.
 - `docs/NEXT_STEPS.md`: the ranked plan after each submission (what to build next and why).
-- `docs/REDESIGN.md` and `bots/samit-sucks/README.md`: the redesign started 2026-10-25 (why, the phase plan, what phase 1 measured). `hybrid` stays live until `samit-sucks` beats it.
+- `bots/samit-sucks/README.md` (status, how to test, open problems) and `bots/samit-sucks/DESIGN.md`: samit-sucks v2, a from-scratch bot started 2026-10-26, not yet competitive. `docs/REDESIGN.md`: the earlier phased redesign (tags `samit-sucks-v1`, `samit-sucks-3a`). `hybrid` stays live until samit-sucks beats it.
 
 ## Setup
 - cambc 4.0.0 is installed in `.venv` (gitignored; refreshed 2026-10-26, engine 2.0.0: see the update note below). Use `.\.venv\Scripts\cambc`, or activate with `.\.venv\Scripts\Activate.ps1`. `sdk/` and `cambc.toml` match it (refreshed with `cambc init --yes .` on 2026-10-22 after engine 1.0.3; `pip install -U cambc` in the venv first, then `cambc init --yes .`).

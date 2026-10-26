@@ -11,17 +11,19 @@ import board
 import config
 from world import REWARD, RESPAWNING
 
-FARM, BANK, HOME = "farm", "bank", "home"
+FARM, BANK, HOME, EVADE = "farm", "bank", "home", "evade"
 CAPTURE_TURNS = 5
 
 
 class Job:
-    __slots__ = ("kind", "group", "altar", "since", "bodies", "score", "why", "wait")
+    __slots__ = ("kind", "group", "altar", "since", "bodies", "score", "why", "wait", "close", "waiting")
 
     def __init__(self, kind, since, group=None, altar=None, bodies=1, score=0.0, why=""):
         self.kind, self.since, self.group, self.altar = kind, since, group, altar
         self.bodies, self.score, self.why = bodies, score, why
         self.wait = 0                     # turns spent held off a contested altar
+        self.close = False                # ranged: our camps were out of sight from range, so stand beside them
+        self.waiting = False              # taken while the group was respawning: we came to wait for it
 
     def __repr__(self):
         target = ("g%d" % self.group.index) if self.group is not None else (
@@ -36,13 +38,14 @@ class Market:
         self.job = None
         self.unreachable = {}            # group -> round our own field could not reach it (forgotten after a while)
         self.bad_altars = {}             # altar (x, y) -> round our own field could not reach it
+        self.hold_start = {}             # group -> round we began holding beside it for the party
         self.last_group = None          # the group we last stood beside (the table's origin)
 
     # ---- pricing ------------------------------------------------------------------
     def travel(self, g):
         """Walking turns from here to group g: the job field when we have it, else the table."""
         w = self.w
-        f = self.paths.fields.get(("g", g.index))
+        f = self.paths.fields.get(("g", g.index, w.attack_range))
         if f is not None:
             return self.paths.get(f, w.pos)
         plan = w.plan
@@ -121,11 +124,31 @@ class Market:
         for k, (kind, gi) in enumerate(w.claims):
             if k != w.slot and k < w.n_bodies and kind in (board.FARM, board.HELP) and gi >= 0:
                 claimed[gi] = claimed.get(gi, 0) + 1
-        best, best_score, best_bodies = None, 0.0, 1
+        # Walking is never shorter than the straight line, so value / (Chebyshev + capture) bounds
+        # a group's score: price the best bounds first and stop once none can win (~50K a group
+        # priced; lanes has 42).
+        x, y = w.x, w.y
+        current = self.job.group if self.job is not None and self.job.kind == FARM else None
+        # The clear takes at least health / (our damage x the biggest party), split that many ways.
+        party = min(w.n_bodies, config.MAX_PARTY)
+        dps = max(1.0, w.dmg) * party
+        order = []
         for g in w.groups:
-            if g.value <= 0:
-                continue
+            if g.value > 0:
+                clear = g.health_left / dps if g.state != REWARD else 0.0
+                order.append((g.value / (max(abs(g.cx - x), abs(g.cy - y)) + CAPTURE_TURNS + clear), g))
+        order.sort(key=lambda t: -t[0])
+        best, best_score, best_bodies = None, 0.0, 1
+        self.priced = 0
+        if current is not None:
+            order = [t for t in order if t[1] is current] + [t for t in order if t[1] is not current]
+        for bound, g in order:
+            if bound * config.JOB_STICKINESS <= best_score or self.priced >= config.MAX_PRICED:
+                break                                 # a fixed budget: the best bounds only
+            self.priced += 1
             score, bodies = self.price(g, claimed.get(g.index, 0))
+            if g is current:
+                score *= config.JOB_STICKINESS        # finish what we started: a switch walks away from it
             if score > best_score:
                 best, best_score, best_bodies = g, score, bodies
         return best, best_score, best_bodies
@@ -156,18 +179,49 @@ class Market:
         return best, best_t
 
     # ---- events -------------------------------------------------------------------
+    def _can_finish(self, g):
+        """Hurt beside a group that is nearly dead: the damage its remaining camps can still do
+        before we finish them fits in what we have left (a heal trip now would waste the clear)."""
+        w = self.w
+        if g.state == REWARD:
+            return not w.enemies                       # standing on our capture
+        if g.health <= 0 or max(abs(g.cx - w.x), abs(g.cy - w.y)) > g.reach + 2:
+            return False
+        left = g.health_left / g.health
+        turns = g.health_left / max(1.0, w.dmg) + 1
+        return config.CAMP_DAMAGE_SHARE * g.strength * left * turns < w.hp - config.FINISH_RESERVE * w.max_hp
+
+    def threatened(self):
+        """A stronger enemy side within a few tiles of its reach: leave the job (turning away early
+        is what the top teams do; the guard step was what cut deaths in phase 3b)."""
+        w = self.w
+        if w.at_spawn:
+            return False
+        near = False
+        for e in w.enemies:
+            if not e.on_spawn and e.dist <= e.reach + config.EVADE_MARGIN:
+                near = True
+                break
+        return near and w.power_balance() < config.FIGHT_BALANCE
+
     def needs_review(self):
         w, job = self.w, self.job
         if job is None:
             return "none"
+        if job.kind == EVADE:
+            if not any(e.dist <= config.EVADE_CLEAR and not e.on_spawn for e in w.enemies):
+                return "clear"
+            return None
         if w.round - job.since >= config.JOB_REVIEW_EVERY:
             return "review"
+        if job.kind != HOME and self.threatened():
+            return "threat"
         hurt = w.hp_ratio < config.HOME_HEALTH and not w.at_spawn
         if job.kind == FARM:
             g = job.group
-            if g.state == RESPAWNING and g.back_round - w.round > self.travel(g) + 5:
+            if g.state == RESPAWNING and not job.waiting and g.back_round - w.round > self.travel(g) + 5:
                 return "done"
-            if hurt:
+            if hurt and not self._can_finish(g):
                 return "hurt"
             if w.gems >= config.BANK_FULL_BAG:
                 return "bag"
@@ -185,8 +239,13 @@ class Market:
         """A new job for this body. Returns it (also kept in self.job)."""
         w = self.w
         rnd = w.round
+        import _cambc
+        f0 = _cambc.fuel_remaining()
         g, score, bodies = self.best_farm()
+        self.prof = (f0 - _cambc.fuel_remaining(), self.priced, len(w.groups))
         hurt = w.hp_ratio < config.HOME_HEALTH
+        if not w.at_spawn and self.threatened():
+            return self._set(Job(EVADE, rnd, why="%d enemies" % len(w.enemies)))
         if not w.at_spawn and (hurt or (w.gold >= config.HOME_SHOP_GOLD and w.gems == 0 and g is None)):
             return self._set(Job(HOME, rnd, why="hurt" if hurt else "shop"))
         if w.at_spawn and w.hp_ratio < 0.95:
@@ -203,12 +262,16 @@ class Market:
                         or risk >= trip * score):
                     return self._set(Job(BANK, rnd, altar=altar, why="bag %d" % w.gems))
         if g is not None:
-            return self._set(Job(FARM, rnd, group=g, bodies=bodies, score=score))
+            job = Job(FARM, rnd, group=g, bodies=bodies, score=score)
+            job.waiting = g.state == RESPAWNING
+            return self._set(job)
         return self._set(Job(HOME, rnd, why="idle"))
 
     def _set(self, job):
         old = self.job
         self.job = job
+        if old is None or old.group is not job.group:
+            self.hold_start = {}                     # a new group: its party hold starts afresh
         if config.LOG_JOBS and (old is None or old.kind != job.kind or old.group is not job.group):
             print("r%d s%d %s: %r%s score=%.3f" % (self.w.round, self.w.slot, self.w.kind, job,
                                                   (" (" + job.why + ")") if job.why else "", job.score), flush=True)

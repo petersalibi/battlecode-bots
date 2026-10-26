@@ -34,6 +34,7 @@ class Tactics:
         self.ward_round = -100
         self.ward_pos = None
         self.trace = ""
+        self.yield_turns = 0             # turns our best step has been blocked (giving way)
 
     # ---- the turn ----------------------------------------------------------------------
     def run(self):
@@ -41,7 +42,7 @@ class Tactics:
         self.trace = ""
         self.attacked = False
         self.cast = False
-        weight = config.HOME_THREAT_WEIGHT if job.kind == M.HOME else config.THREAT_WEIGHT
+        weight = config.HOME_THREAT_WEIGHT if job.kind in (M.HOME, M.EVADE) else config.THREAT_WEIGHT
         field, stay, target = self._objective(job)
         self._threats(job, weight)
         if w.can_move:
@@ -72,11 +73,12 @@ class Tactics:
         """The first of a party waits outside the group's reach until enough allies are near it,
         the group is already awake (someone is on it), or PARTY_HOLD_TURNS have passed."""
         w, g = self.w, job.group
-        if w.round - job.since >= config.PARTY_HOLD_TURNS:
-            return False
         d = min(max(abs(t.x - w.x), abs(t.y - w.y)) for t in g.tile_list)
         if d > g.reach + 1:
             return False                              # not there yet: keep walking
+        start = self.market.hold_start.setdefault(g.index, w.round)
+        if w.round - start >= config.PARTY_HOLD_TURNS:
+            return False
         if w.awake is not None:
             for camp, gi, cx, cy, hp in w.camps:
                 if gi == g.index and w.awake.is_set(cambc.Vec2(cx, cy)):
@@ -104,7 +106,22 @@ class Tactics:
                 if g.tiles.is_set(w.pos):
                     return None, CAPTURE_STAY, None
                 return p.onto_group(g), 0.0, None
-            return p.to_group(g), 0.0, g
+            if job.close:
+                return p.to_group(g, 1), 0.0, g
+            field = p.to_group(g)
+            live = [(cx, cy) for camp, gi, cx, cy, hp in w.camps if gi == g.index]
+            if (field is not None and live and p.get(field, w.pos) <= 1
+                    and all(max(abs(cx - w.x), abs(cy - w.y)) > w.attack_range for cx, cy in live)):
+                # Beside the group, but its living camps are out of our reach (the near ones are
+                # dead): a small field to the living ones.
+                local = p.near_tiles(live, w.attack_range)
+                if local is not None:
+                    return local, 0.0, g
+            if (field is not None and w.ranged and p.get(field, w.pos) == 0
+                    and not any(gi == g.index for camp, gi, cx, cy, hp in w.camps)):
+                # In range but its camps are out of sight (a bush): go in close.
+                job.close = True
+            return field, 0.0, g
         if job.kind == M.BANK:
             if self._altar_contested(job.altar):
                 # Enemies hold the altar and the tribute would take more than a turn under their
@@ -197,6 +214,17 @@ class Tactics:
         if field is None:
             return                                   # standing on our capture
         here = p.get(field, w.pos)
+        if here >= UNREACHABLE:
+            # Standing on a tile every field treats as a wall (a camp tile after a capture, which
+            # also holds the group's respawn): step off onto the neighbour nearest the goal.
+            best, best_v = None, UNREACHABLE
+            for t in p.blocked().reachable_tiles(w.pos, 1).positions():
+                v = p.get(field, t)
+                if v < best_v:
+                    best, best_v = t, v
+            if best is not None:
+                p.move(best)
+            return
         dash = self._dash() if w.can_cast else None
         span = 3 if dash is not None else 1
         # Only sources whose edge passes within reach of the candidates change the choice.
@@ -266,18 +294,37 @@ class Tactics:
             if best is not None and self._use_dash(dash, best):
                 return
         blocked = p.blocked()
-        for d in field.next_moves_from(w.pos):
+        moves = field.next_moves_from(w.pos)
+        if config.TRACE_SLOT == w.slot:
+            self.trace += " desc%s" % ([(d.x, d.y, int(blocked.is_set(w.pos + d))) for d in moves],)
+        for d in moves:
             t = w.pos + d
             if not blocked.is_set(t) and p.move(t):
                 return
         # Every best step is taken: any free neighbour that still gets nearer.
+        free = blocked.reachable_tiles(w.pos, 1).positions()
         best, best_v = None, here
-        for t in blocked.reachable_tiles(w.pos, 1).positions():
+        for t in free:
             v = p.get(field, t)
             if v < best_v:
                 best, best_v = t, v
-        if best is not None:
-            p.move(best)
+        if best is not None and p.move(best):
+            self.yield_turns = 0
+            return
+        # Blocked by one of us in a narrow way (a spawn corridor): a farm or bank trip gives way
+        # after a turn, to the side or back, so a body going home hurt gets through.
+        self.yield_turns += 1
+        if self.yield_turns >= 2 and self.market.job.kind in (M.FARM, M.BANK):
+            back, back_v = None, -1
+            for t in free:
+                if t.x == w.x and t.y == w.y:
+                    continue
+                v = p.get(field, t)
+                if v < UNREACHABLE and v > back_v:
+                    back, back_v = t, v
+            if back is not None and p.move(back):
+                self.yield_turns = 0
+                self.trace += " yield"
 
     def _dash(self):
         w = self.w

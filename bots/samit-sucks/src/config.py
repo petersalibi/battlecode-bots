@@ -26,6 +26,8 @@ FARM_MAX_TRIPS = 3          # a group whose clear needs more heal trips than thi
 ALTAR_WAIT = 12             # turns held off a contested altar before banking elsewhere ...
 ALTAR_AVOID = 60            # ... and that altar is skipped this long
 UNREACHABLE_FORGET = 150    # a target our field could not reach is skipped this many rounds (seals and holes change)
+MAX_PRICED = 8              # groups priced per job choice at most, best bounds first (~65K each)
+JOB_STICKINESS = 1.3         # the current farm scores this much more at a review (a switch mid-clear wastes the walk)
 FARM_TRAVEL_MAX = 60        # groups further than this many walking turns are not candidates
 
 # Banking: bank when what the bag risks exceeds what the trip costs (gem-turns).
@@ -33,6 +35,9 @@ BANK_RISK_PER_TURN = 0.004  # chance a turn of carrying ends in losing the bag (
 BANK_MIN_BAG = 6            # never walk to an altar for less
 BANK_FULL_BAG = 40          # bank at this bag whatever the risk (a death loses it all)
 BANK_ENDGAME_MARGIN = 30    # rounds of slack kept to bank before the round limit
+EVADE_MARGIN = 3            # a stronger enemy side within its reach plus this: leave the job and walk home through the threat layer ...
+EVADE_CLEAR = 8             # ... until no enemy is within this
+FINISH_RESERVE = 0.15        # hurt beside a nearly dead group: finish it if the rest of the clear leaves us this much
 HOME_HEALTH = 0.45          # below this, with nothing healing us, the job becomes HOME (v30: 45% had the fewest deaths)
 HOME_SHOP_GOLD = 150        # go home to shop with this much gold and an empty bag (one emblem)
 RECALL_MIN_TURNS = 8        # walking is better than recalling (5 turns, interrupted by damage) when home is nearer

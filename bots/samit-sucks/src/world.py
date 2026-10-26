@@ -219,11 +219,15 @@ class World:
         groups near enough to be in sight."""
         lookup = self.camp_at
         seen, count = {}, {}
+        awake = vision.awake_camp_tiles()
+        job = self.job_group.index if self.job_group is not None else -1
         for p in vision.camp_tiles().positions():
             entry = lookup.get((p.x, p.y))
             if entry is None:
                 continue
             camp, gi = entry
+            if gi != job and not awake.is_set(p):
+                continue                       # asleep and not ours: nothing reads its health (~2K a call)
             try:
                 hp = camp.health()
             except Exception:
@@ -236,7 +240,7 @@ class World:
             g = self.groups[gi]
             if count[gi] == len(g.camps):
                 g.health_left = hp
-        self.awake = vision.awake_camp_tiles()
+        self.awake = awake
         x, y, rnd = self.x, self.y, self.round
         job = self.job_group
         sweep = rnd % GROUP_SWEEP_EVERY == self.slot % GROUP_SWEEP_EVERY

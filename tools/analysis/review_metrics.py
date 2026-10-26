@@ -159,7 +159,7 @@ def collect(spec, us, jobs):
     index_path = os.path.join(path, "raw", "index.json")
     index = json.load(open(index_path, encoding="utf-8")) if os.path.exists(index_path) else None
     selector = selector or ("us" if index else "all")
-    if selector not in ("all", "file", "won") and index is None:
+    if selector not in ("all", "file", "otherfile", "won") and index is None:
         sys.exit(f"{label}: selector '{selector}' needs {index_path}")
     total = defaultdict(float)
     with ProcessPoolExecutor(max_workers=jobs) as ex:

@@ -1,268 +1,110 @@
-# samit-sucks
+# samit-sucks (v2): status and handover
 
-The redesign of `hybrid`, built beside it so `hybrid` stays the live submission until this bot
-beats it on the cohort. It follows the external review of 2026-10-25: macro planned in the draft,
-micro as one influence evaluation per step, and a fixed fuel schedule.
+**Read this first, then `DESIGN.md`.** Written 2026-10-26 at the end of the session that built v2.
 
-## Phases
+`samit-sucks` is a from-scratch rewrite (v2), not the hybrid-derived redesign it used to be. The
+old code is tagged `samit-sucks-v1` (phases 0-4 with the losing parts switched off) and
+`samit-sucks-3a` (phase 3a, the one measured gain of the old redesign); their record is in
+`docs/REDESIGN.md` and in git history. **`hybrid` is still the live submission.** Nothing of
+v2 has been pushed or submitted; all commits are local on `samitIsUnemployed`.
 
-| Phase | What | Done when |
+## Where it stands (engine 2.0.0, cambc 4.0.0)
+
+v2 plays full games with no errors and few exhaustions, but it is **not yet competitive**.
+
+| Test (both sides of each map) | v2 | old bot (`samit-sucks-v1`) |
 |---|---|---|
-| 0 (done) | Seed from `hybrid-v42`, scorecard script, top-ten replays | v42 scorecard and top-ten scorecard side by side |
-| 1 (done but quiet turn) | Skeleton on a fixed fuel budget per turn phase; no branch reads fuel remaining | a copy with dormant code mirrors 40-40 exactly; no exhaustions; quiet turn under ~400K |
-| 2 (done) | Shared memory: 5 position bytes (16x16 cells), enemy sighting cell + age, claims by round parity | logged ally positions match the replay within a cell and a round |
-| 3 (3a kept; 3b-3c lost, off) | Micro: camp-reach cost board, local influence sum (enemy reach, camp reach, sightings, objective, allies), engage rule, focus fire. No flee mode | cohort deaths down and allies at death up against a same-hour control |
-| 4 (built, lost, off) | Macro in the draft: map class, per-body group sequence and partner, bank altars, ward spots on lanes; re-plan only on events | cohort gem margin beats the greedy placeholder |
-| 5 | Switch the submission, tune weights one at a time | |
+| Head to head, 6 maps (starfish, ambush, the-farm, lanes, big-world, collision) | 0-12, 26 gems / 100 rounds vs 85, deaths 65 vs 11 | |
+| Economy vs `starter-python` (rounds to 1,000 gems, or gems at round 2,000) | lanes 1,464-1,622; big-world ~1,695; collision 1,759-1,802; starfish 1,983 / 961 gems; the-farm 1,687 / **165 gems**; ambush **422 / 733 gems** | every map 900-1,470 rounds |
 
-## Phase 0 status
+So the uncontested economy runs at roughly 55-70% of the old bot's speed, with two stalls still
+open (the-farm side A, ambush), and it loses fights badly to a bot that fights.
 
-- `src/` is `hybrid-v42` exactly (the live code, same as v39), not the working copy of `hybrid`.
-  Check: `python tools/run_matches.py samit-sucks hybrid@hybrid-v42` gives 40-40, margin +0.
-- Record and measurements: `docs/REDESIGN.md`.
-- Scorecard: `tools/analysis/review_metrics.py` (deaths, contact, health when stepping away, allies
-  and enemies at death, ally within 4, wards). Local v42 mirror baseline (80 games, 1.0.3):
+## How it works (one paragraph per module)
 
-  | deaths/g | contact | hp@away | ally5@death | enemy5@death | ally4 | wards/g |
-  |---|---|---|---|---|---|---|
-  | 16.4 | 15% | 59% | 0.47 | 1.44 | 37% | 248 |
+- `draft.py` / `plan.py`: pick from `config.DRAFT_PRIORITY` (pre-patch list), then on our first
+  draft turn (100x fuel) build the map model: walking turns from our spawn and theirs to every
+  camp group, the nearest altar per group, and group-to-group walking turns (full table, or the
+  k nearest when 1 KB is short). ~6-13M fuel. Read in game as `w.plan`.
+- `world.py`: static setup over the first turns (groups, camp lookup, spawn field, thin holes
+  for dash bodies), then a lean per-turn view: me, enemies (kit power, `kits.py`), allies only
+  when an enemy is in sight, camps (health read only for the job's group and awake camps),
+  group states (job group every turn, others every 8 rounds).
+- `board.py`: 8 bytes of shared memory: per body its claim or its 16x16 cell, an enemy sighting.
+  Measured exact in phase 2 of the old redesign.
+- `market.py`: jobs. FARM g (clear and capture), BANK altar, HOME (heal/shop, recall when far and
+  safe), EVADE (a stronger enemy side within reach + 3: walk home through the threat layer until
+  nothing is within 8). A FARM is priced as value / (walk + respawn wait + clear + capture +
+  heal trips), with the fewest bodies that keep heal trips within `FARM_MAX_TRIPS` (parties,
+  discounted per extra body), pruned by an optimistic bound and capped at `MAX_PRICED` groups a
+  choice. Banking compares bag risk with trip cost. Jobs change only on events
+  (`needs_review`).
+- `tactics.py`: one evaluation a turn over stay / steps / dash landings: progress on the job's
+  field, minus priced next-turn damage (enemies, awake camps that would pick us, the fading
+  sighting), plus allies while threatened, plus attack opportunity. Then attack (kill > fight
+  when the balance allows > the job's camp; never wake a camp we are not farming), casts by kit,
+  attack reset, wards every 20 rounds. Holds for a party outside camp reach, steps off camp tiles
+  after a capture, walks to living camps when the near ones are dead, gives way in corridors.
+- `paths.py`: fields per target cached for the match, at most one new field a turn (a job whose
+  field is not built waits a turn: deterministic, never fuel-gated).
+- `kits.py`: champion data and builds for the new items (a first guess: Capture emblem first,
+  then Jungle / Monster / Power, then Bruiser). **Untested.**
 
-  The mirror is against ourselves, so these are not ladder numbers; the review's 21.9 deaths,
-  51% and 0.30 come from ladder games.
-- Still to do: fetch the top ten's ranked games and our own, then run the scorecard on both:
+## How to work on it
 
-  ```
-  python tools/fetch_replays.py --teams 10 --per-team 10 --since <engine 1.0.3 time> --won-only -o data/replays/top10/raw
-  python tools/replay_dump.py data/replays/top10/raw -o data/replays/top10/ladder --jobs 6
-  python tools/fetch_ours.py --since <ISO UTC> -o data/replays/ours-v42
-  python tools/analysis/review_metrics.py ours=data/replays/ours-v42 top10=data/replays/top10@won
-  ```
+```
+python -m pyflakes bots/samit-sucks/src/*.py                      # before every run
+python tools/run_matches.py samit-sucks starter-python --maps 01starfish,00ambush,01the-farm,00lanes,01big-world,00collision --out replays/batch/<new dir>
+python tools/run_matches.py samit-sucks samit-sucks@samit-sucks-v1 --maps ... --out replays/batch/<new dir>
+```
 
-## Phase 1 status (2026-10-25): done, except the quiet-turn target
+- **Results rows are the first bot's numbers on both sides** (`gems_a` is always ours). Never
+  read `_b` for side-B games: that mistake corrupted the phase 3b-4 decisions.
+- **Use a fresh `--out` directory**: the harness reuses an existing one and reports old games.
+- **Edit code with an editor, not shell heredocs**: backslash line continuations got mangled
+  several times.
+- Every body prints a `stats r500/r1000 sN NAME: [...]` line: turns per job kind (`farm`, `bank`,
+  `home`, `evade`), `hit` (turns it attacked), `hold` (waiting for a party), and stall counters:
+  `pace` (back on the tile of two turns ago without attacking) and `still`; plus `gathered` and
+  `banked` gems. A body with many farm turns and few hits is stuck: trace it.
+- `config.TRACE_SLOT = n` prints one `t r...` line a turn for body n (position, job, group state,
+  field value, attacks, fuel by stage: refresh / job choice / tactics) and, on a HOME job, the
+  spawn field and the units around spawn. `config.LOG_JOBS` prints every job change.
+- The economy test against `starter-python` isolates farming from fighting; the head-to-head
+  against `samit-sucks-v1` measures both.
 
-No decision reads the fuel left. `fuel.py` is for logs only; optional work is sized from the game
-state (`budget.py`, constants under "Fuel plan" in config).
+## Open problems, in the order I would take them
 
-- Both live networks are off (`USE_NN_MODE`, `USE_NN_CONTACT`): 36-44 against v42, inside the
-  mirror's noise. `nn.py` and the weights stay; a network would run only when `budget.fits(w, cost)`.
-- Setup is fixed by the map: round 1 never acts; maps with many camps finish setup on round 2
-  (`budget.first_turn_fits`, fit over 38 maps); `finish_init` runs one fixed step a turn; maps from
-  80x80 up do all setup on turns of their own (`World.setup_alone`).
-- One heavy job a turn (`w.heavy`): a camp-list rebuild or a new field of `HEAVY_FIELD` or more. A
-  second one in the same turn waits for the next turn (`navigation.field_to` returns None and the
-  body holds). This replaced v42's fuel-based retarget deferral and the interim safety guard,
-  which fired ~2,700 times in 80 games without preventing exhaustions.
-- A re-rank no longer re-scores the candidates the mode choice scored that round; claims decode
-  through a table.
+1. **the-farm side A: 165 gems in 2,000 rounds** with no deaths. Another stall; trace the body
+   whose `stats` line shows many farm turns and few hits.
+2. **ambush: 422-733 gems.** Most gem value is in elk/golem groups; check parties actually form
+   (`hold` turns, claims) and that heal trips are priced right (`home` turns run 250-480 a body).
+3. **Heal trips.** Bodies on big groups loop farm -> hurt -> home -> back every 10-15 rounds.
+   Options: finish more (the `_can_finish` check exists), prefer soloable groups more strongly,
+   use the Home emblem, or count Jungle/Durability in the damage model.
+4. **Fighting.** Deaths are 6x the old bot's against a bot that fights; `EVADE` cut them from 136
+   to ~65 over 12 games. Engagement is still crude (`FIGHT_BALANCE` on calibrated kit power).
+   Measure on the band (CLAUDE.md), not the mirror, once the economy is level.
+5. **Builds for the new items** (`kits.BUILDS`): test Capture-first against the old pre-patch
+   orders; Prospector on cluster-heavy maps; Tribute for long banking walks.
+6. **Fuel:** refresh ~150K, tactics ~150-400K a turn; the job choice is capped (~0.5M). Lanes and
+   big-world are where exhaustions appear (~20 in 12 games now).
+7. Then the full 70-map run against `samit-sucks-v1` and `hybrid`, and the band.
 
-Results, 80 games each:
+## Change log of this session (all measured against `samit-sucks-v1` or `starter-python`)
 
-| Test | Result |
+| Fix | Effect |
 |---|---|
-| vs itself plus 20K fuel a turn | **40/40 maps mirror exactly**, deaths 1,190 vs 1,190 (v42 under the same test: 2/40, deaths 1,328 vs 1,493) |
-| vs `hybrid@hybrid-v42` | 38-42, margin -41, deaths 1,271 vs 1,250, **4 exhaustions** (v42: 54) |
-
-Check with `python tools/analysis/mirror_check.py <run dir>`. Because behaviour no longer depends
-on fuel, a pure optimisation must also mirror 40/40 against the version before it: run the new
-code against a copy of the old one. That test caught one wrong assumption (a living camp in sight
-does not always mean its group reads as alive).
-
-Not met: the quiet turn. Average fuel a turn is 790K (v42: 969K). Profiled, the cost is spread
-thinly over the old mode choice and actions (camp refresh ~170K, candidate rebuild ~450K plus
-~45K per candidate scored, captures ~80K); two verified-exact rewrites (scoring with bound
-constants, a spatial index for the group-vision loop) saved under 0.5% and were dropped. That
-code is what phases 3 and 4 replace, so the 400K target moves to their design: give the new micro
-layer a fixed budget and keep refresh lean. The camp-list rebuild is the expensive habit to
-avoid in the new macro.
-
-The remaining exhaustions are on lanes (42 groups) and yellow brick road, a handful a game pair.
-
-Known v42 bug carried over: a hurt body in flee mode with an enemy at the edge of sight can stand
-still for the rest of the game (pilgrimage, 1,450 rounds). Phase 3 removes flee mode.
-
-## Phase 2 status (2026-10-26): done
-
-Shared memory now carries positions (layout in `memory_codec.py`):
-
-| Bytes | What |
-|---|---|
-| 0-4 | per body: its claim (status + group) or its position cell on a 16x16 grid |
-| 5 | enemy sighting: the cell of the enemy nearest the body that saw it |
-| 6 | sighting round mod 64 (bits 5-0) and enemies in sight 1-3+ (bits 7-6) |
-| 7 | bits 4-0: which of bytes 0-4 hold a claim |
-
-A body publishes its claim on the turn it changes (not twice running), every 32 rounds, and every
-turn while dead; otherwise its position. Every body keeps a `memory_codec.Board` (`w.board`) with
-each ally's latest claim and cell, how old the cell is (`board.age(k, round)`), and the sighting.
-`w.claims` is the board's claim list, so the old macro reads it unchanged. The plan said "claims by
-round parity"; the kind mask (byte 7) does the job better: positions go out on almost every turn
-and a changed claim goes out at once. The contested and break-out bytes are gone (their writers
-were all behind switches that are off; `w.contested` is always None).
-
-Check: `config.LOG_BOARD` on, then `python tools/run_matches.py samit-sucks hybrid@hybrid-v42 --debug
---log-limit 50000000` and `python tools/analysis/board_check.py <run dir>`. 80 games, 1.65M
-beliefs about living allies:
-
-- 99.4% read this round or last, and **100.0% of those in the ally's cell now or one turn ago**.
-- 88.6% read as current (age 0): 100% in the right cell. 10.8% a round old (a claim turn): 62%.
-- Tile error: within 2 tiles 95.3%, within 5 tiles 99.9%.
-- The debug and release runs gave the same results game for game, so the logging is inert.
-
-Release results, 80 games each:
-
-| Test | Result |
-|---|---|
-| vs `hybrid@hybrid-v42` | 41-39, margin -19, deaths 1,235 vs 1,261, 20 exhaustions |
-| vs phase 1 (`samit-sucks@f7b4cf7`) | 45-35, margin +52, deaths 1,205 vs 1,214 |
-
-Board cost on lanes: read ~33K, publish ~20K a turn (the old claim code was ~15K). Exhaustions
-are not from that: phase 1 plus a ~30K-a-turn burn against phase 1 (37/40 maps identical) gave 13
-exhaustions to the plain copy's 22. They come from lanes and big-world turns already at ~2.4M, and
-the count swings with the game. Nothing reads positions or sightings yet; phase 3 is the consumer.
-
-## Correction (2026-10-26): phase 3 and 4 numbers below are wrong
-
-`tools/run_matches.py` rows are always from the first bot's point of view (`gems_a`, `deaths_a`,
-... are ours on both the -A and -B games). The summaries behind the 3a-4 tables below took the
-`_b` fields for side-B games, so half of each figure was v42's. Recomputed (vs v42, 80 games):
-
-| Version | W-L | margin/g | our deaths | v42 deaths | our exhaustions |
-|---|---|---|---|---|---|
-| phase 2 | 39-39 | -19 | 1,235 | 1,261 | 20 |
-| **3a, threat layer** | **43-35** | **+86** | 1,206 | 1,395 | 86 |
-| 3b, engage rule (horizon 2, guard) | 25-53 | -280 | 1,357 | 1,001 | 108 |
-| 3b without the guard | 17-61 | -310 | 1,693 | 963 | 76 |
-| 3c, focus fire on | 29-49 | -208 | 1,348 | 1,112 | 113 |
-| 4, macro with engage, old wards | 28-50 | -141 | 1,180 | 1,143 | 168 |
-| current code, engage and macro off | 39-39 | +69 | 1,183 | | 101 |
-| current code, engage off, macro on | 31-47 | -73 | 1,164 | | 133 |
-
-Only 3a is a gain. The engage rule, focus fire and the macro plan each lose; `ENGAGE_RULE`,
-`FOCUS_FIRE` and `MACRO` are off, which puts the bot back at 3a's level. The review scorecard's
-W-L and margin columns are unreliable too (they read the last turn record, before the final
-tributes); its per-team columns are fine.
-
-## Phase 3 status (2026-10-26): done (3c focus fire built but off)
-
-Sub-steps: **3a** the threat layer in every step; **3b** no flee mode, an engage rule in place of
-the fight/flee rule stack, retreat = home with the layer on; **3c** focus fire; **3d** a fixed fuel
-budget for the layer.
-
-### 3a: `micro.py`
-
-`navigation.step_along` asks `Micro.step` first whenever something could hurt us. It scores
-standing still and the free neighbours: progress along the objective field, minus damage that
-could land on the tile next turn as a share of our effective health (`MICRO_THREAT_WEIGHT` 10,
-`MICRO_FLEE_WEIGHT` 20 in flee, 0 in a fight for now), plus allies within 4 while there is danger.
-Damage sources: visible enemies (reach + 1, a soft 25% two tiles further), awake camps outside the
-group we are fighting for which we would be the nearest champion in reach (a tie counts half), and
-the shared sighting when no enemy is in sight (reach 2 + age, fading over 6 rounds). Allies come
-from vision, else from the phase 2 board. Flee's step is now this layer on the spawn field.
-
-Cost: a tile costs ~13K fuel to score in this interpreter, so only sources whose edge passes
-through our 3x3 neighbourhood are scored (the others add the same to every tile); with none, the
-usual pathing runs. Scoring every source every time cost ~190K a call.
-
-Results, 80 games each (same opponent, dumps scored with `review_metrics.py`):
-
-| vs `hybrid@hybrid-v42` | W-L | margin | deaths/g | ally5@death | ally4 | our exhaustions | our stalls |
-|---|---|---|---|---|---|---|---|
-| phase 2 | 39-38 | -6 | 15.4 | 0.55 | 37% | 44 | 213 |
-| 3a | 44-34 | +78 | 15.1 | 0.59 | 39% | 56 | 250 |
-
-Against phase 2 directly: 38-42, margin +54, deaths 1,065 vs 1,233.
-
-The extra stalls are bodies that will not walk into an awake camp's reach (as its nearest champion)
-until the stall guard retargets (fracture, islands). Removing the camp layer drops them (91 to 59 on
-those two maps, 4 games) but the margin falls from +1,077 to +124; removing the sighting, +389. The
-real fix is a re-plan when the objective sits behind a threat (phase 4).
-
-### 3b, first try (reverted): flee decisions converted
-
-Every flee decision was turned into something else (`decide._set_mode`), RECALL walking home
-through the layer at flee weight with flee's shield, stun and parting shot:
-
-| vs v42, 80 games | W-L | deaths/g | ally5@death |
-|---|---|---|---|
-| 3a | 44-34 | 15.1 | 0.59 |
-| healthy bodies keep their objective, hurt ones go home | 18-60 | 20.3 | 0.47 |
-| every flee goes home | 39-39 | 15.3 | |
-
-Keeping the objective fails because the layer only votes when a step is taken: a body capturing,
-or standing at its camp attacking, never steps, so it stands while the enemy closes. Going home
-always costs farm time. Removing flee needs the layer to weigh staying to act against moving on
-every turn (the objective's value of standing here against the damage that could land here), not
-only inside `step_along`. That is the next attempt.
-
-### 3b: one engage rule, no flee mode, the guard step
-
-With `ENGAGE_RULE` the mode choice is `decide._choose_engage`: the spawn gate, then `_engage`, then
-the script over farm, capture, tribute and recall only. `_engage` replaces the hard flee rules, the
-contact head, the commitment, outnumbered, squad, early-leave, pair and chase rules:
-
-- hurt (below `FLEE_HEALTH` with an enemy within 5): fight if running would not save us
-  (`should_stand`), else RECALL, which now walks home through the layer at flee weight with
-  flee's shield, stun and parting shot, and channels only once nothing hits us;
-- a camp winning with no enemy about: RECALL, the group avoided for a while;
-- FIGHT for a weak enemy close by (kill), the advantage (`FIGHT_POWER_RATIO`), a fight still even
-  (`FIGHT_STAY_RATIO`), an ally fighting beside us, or a target in reach at balance 1 or better;
-- otherwise the objective holds in contact, re-scored every `ENGAGE_RESCORE_TURNS` (scoring is a
-  candidate rebuild, ~450K; the old flee and fight rules skipped it).
-
-`Actions.guard` runs before farm, capture and tribute: when the damage that could land where we
-stand costs more than acting here is worth (`GUARD_*`), it steps away first through the layer, and
-the action can still attack. `camp_damage_incoming` now uses the nearest-champion rule
-(`CAMP_NEAREST_RULE`).
-
-| vs v42, 80 games | W-L | margin/g | deaths | our exhaustions |
-|---|---|---|---|---|
-| 3a | 44-34 | +47 | 1,299 | 56 |
-| engage rule, threat horizon 5 when outnumbered | 36-42 | -16 | 1,204 | 90 |
-| the same without the guard | 36-42 | +9 | 1,318 | 61 |
-| **horizon 2 (kept)** | **44-34** | **+62** | **1,118** | 75 |
-
-Turning away at sight range (an outnumbered horizon of 5) cost wins; the guard is what brings
-deaths down (1,318 to 1,204-1,118).
-
-### 3c: focus fire (off)
-
-A fighting body posts its target's cell in the sighting bytes with byte 7 bit 7 set; allies in
-a fight prefer an enemy in that cell after reach (`FOCUS_FIRE`). On: 42-36, -1 a game, deaths
-1,286; off: 44-34, +62, 1,124. A 16x16 cell is ~5 tiles on big maps, so the call is coarse and
-pulls bodies off the weakest enemy in reach. The threat layer in fights (`MICRO_FIGHT_WEIGHT` 3)
-also lost: 41-37, -50 a game.
-
-### 3d: fixed budget (half)
-
-The layer scores at most the nearest `MICRO_MAX_SOURCES` enemies and `MICRO_MAX_CAMPS` camps.
-Behaviour is still independent of fuel: a copy burning ~30K a turn mirrors 33 of 40 maps, and
-every diverging map had exhaustions in the pair (a suspended turn loses its actions). Not met:
-the turn cost. Lanes averages ~1.1M a turn in every version (3b adds ~40K); its worst turns are
-the old refresh (0.6-1.1M) plus the candidate rebuild in decide (~1.1M). Phase 4's routes are
-the way to drop the per-turn re-ranking.
-
-## Phase 4 status (2026-10-26): done (planned wards off)
-
-`macro.py` makes the plan on our first draft turn (4.5-10.7M of its 25M fuel; 26 bytes for two
-pairs) and carries it in draft memory from `MACRO_AT`: map class (share of camp value on the
-line between the spawns), pairs (slot 2k with 2k+1; an odd last body joins the pair before),
-per pair a route of up to six groups on our side (most value per tile of walk from where the
-route stands), a bank altar on our side nearest the route, and a ward spot on the line from the
-route to the enemy spawn where they are three turns further than us. In the game
-(`World._init_macro`): route groups score x1.5, a group a partner claims x1.5 and is not a stack,
-the bank altar counts six turns nearer, and (`MACRO_WARDS`) the ward goes on the spot.
-
-| vs v42, 80 games, same session | W-L | margin/g | deaths | our exhaustions |
-|---|---|---|---|---|
-| macro off (phase 3) | 43-35 | +57 | 1,128 | 87 |
-| macro, planned wards | 39-39 | +2 | 1,154 | 119 |
-| **macro, old wards (kept)** | **45-33** | **+86** | 1,122 | 125 |
-
-The routes and pairing gain a little (inside the noise of one batch); the planned ward spot
-loses. Exhaustions rose (routes walk further on lanes and big world); the turn cost was not cut.
-
-## Phase 0 notes
-
-- Confirmed by watching top-ten replays (2026-10-25): the review's inferences hold. They ward on
-  the lanes between their farm and the enemy, move in pairs, and turn away at sight range
-  rather than at a health threshold.
+| groups no body can clear were taken at 0.25x score | Marcella soloed a 14-camp boss; now priced with heal trips and parties |
+| dash over holes needed a 3-tile gain | Vesper stood 40 turns at a hole |
+| bank target by straight line, never checked | bank jobs of 200+ turns; now draft table + unreachable altars dropped |
+| capture tile read as a wall | altars marked unreachable after every capture: 0 banked |
+| contested altar | Ryth died tributing 43 gems under two enemies; now holds off, then banks elsewhere |
+| job choice priced 42 groups x 4 party sizes | 2M+ a choice, 483 exhaustions; now bound-pruned and capped: ~20 |
+| party hold clock reset at every review | Vendetta held 882 turns |
+| standing on a camp tile after a capture | bodies froze there (and blocked the respawn); now step off |
+| ranged body in range of a camp hidden in a bush | paced forever; now goes in close |
+| "done" fired on a deliberately awaited respawn | re-chose every turn at ~735K |
+| near camps dead, living ones out of reach | Ryth paced 500 turns; now a small field to the living camps |
+| spawn corridor deadlock | starfish economy 64-80 gems -> 961-1,004 |
+| EVADE job | deaths 136 -> ~65 (12 games) |

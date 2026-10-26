@@ -1,5 +1,7 @@
 # The samit-sucks redesign: record and measurements
 
+> **Superseded 2026-10-26.** This phased redesign (tags `samit-sucks-v1`, `samit-sucks-3a`) ended with only phase 3a a measured gain; the phase 3b-4 results reported here were mis-summed (see the correction in the old README in git history). `bots/samit-sucks` is now v2, a from-scratch bot: see its README and DESIGN.md.
+
 Started 2026-10-25. The live bot stays `hybrid` until `bots/samit-sucks` beats it. This file
 records why the redesign exists, what was built, and what was measured on the way; the phase
 table and current status live in `bots/samit-sucks/README.md`.
