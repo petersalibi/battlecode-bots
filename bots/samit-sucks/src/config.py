@@ -99,7 +99,7 @@ LOG_DECISIONS = False       # print the camp ranking at every retarget (costs fu
 TRACE_SLOT = -1             # print a per-turn trace line for this body slot (dev only, -1 = off)
 LOG_GROUPS = False          # print the camp group table on the first turn (dev only)
 CAMP_NEAREST_RULE = True    # camp_damage_incoming counts an awake camp only when we are its nearest champion in reach (a tie half)
-MACRO = True                # phase 4: the draft's macro plan (macro.py): routes, pairs, bank altars, ward spots
+MACRO = False               # phase 4: the draft's macro plan (macro.py): routes, pairs, bank altars, ward spots (on, engage off: 31-47, -73 a game vs v42; off: 39-39, +69)
 MACRO_FUEL = 6_000_000      # ... made on the first draft turn only when this much fuel is left
 MACRO_CENTRAL_BAND = 4      # ... a group within this many walking turns of equal from both spawns is central (map class)
 MACRO_SIDE_MARGIN = 2       # ... our side: groups (and altars) at most this many turns further from us than from them
@@ -111,7 +111,7 @@ MACRO_PARTNER_BONUS = 1.5   # ... and one a partner claims this much more (and i
 MACRO_ALTAR_SLACK = 6       # the pair's bank altar counts as this many turns nearer than it is
 MACRO_WARDS = False         # the ward goes on the pair's planned spot (actions.ward_plan), not wherever we stand (on: 39-39, +2 a game vs v42; off: 45-33, +86)
 WARD_PLACE_RANGE = 2        # a ward goes at most this far from us (GameRules)
-ENGAGE_RULE = True          # phase 3b: one engage rule (decide._engage), no flee mode, the guard step (Actions.guard)
+ENGAGE_RULE = False         # phase 3b: one engage rule (decide._engage), no flee mode, the guard step (Actions.guard) (on: 25-53, -280 a game vs v42; off: 39-39, +69)
 ENGAGE_RESCORE_TURNS = 4    # ... in contact, not fighting: the objective is re-scored every this many turns
 ENGAGE_KILL_BALANCE = 0.6   # ... a weak enemy close by is run down unless the balance is below this
 ENGAGE_JOIN_BALANCE = 0.8   # ... an ally already in a fight beside us is joined at this balance or better

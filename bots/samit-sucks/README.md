@@ -11,8 +11,8 @@ micro as one influence evaluation per step, and a fixed fuel schedule.
 | 0 (done) | Seed from `hybrid-v42`, scorecard script, top-ten replays | v42 scorecard and top-ten scorecard side by side |
 | 1 (done but quiet turn) | Skeleton on a fixed fuel budget per turn phase; no branch reads fuel remaining | a copy with dormant code mirrors 40-40 exactly; no exhaustions; quiet turn under ~400K |
 | 2 (done) | Shared memory: 5 position bytes (16x16 cells), enemy sighting cell + age, claims by round parity | logged ally positions match the replay within a cell and a round |
-| 3 (done) | Micro: camp-reach cost board, local influence sum (enemy reach, camp reach, sightings, objective, allies), engage rule, focus fire. No flee mode | cohort deaths down and allies at death up against a same-hour control |
-| 4 (done) | Macro in the draft: map class, per-body group sequence and partner, bank altars, ward spots on lanes; re-plan only on events | cohort gem margin beats the greedy placeholder |
+| 3 (3a kept; 3b-3c lost, off) | Micro: camp-reach cost board, local influence sum (enemy reach, camp reach, sightings, objective, allies), engage rule, focus fire. No flee mode | cohort deaths down and allies at death up against a same-hour control |
+| 4 (built, lost, off) | Macro in the draft: map class, per-body group sequence and partner, bank altars, ward spots on lanes; re-plan only on events | cohort gem margin beats the greedy placeholder |
 | 5 | Switch the submission, tune weights one at a time | |
 
 ## Phase 0 status
@@ -119,6 +119,28 @@ Board cost on lanes: read ~33K, publish ~20K a turn (the old claim code was ~15K
 are not from that: phase 1 plus a ~30K-a-turn burn against phase 1 (37/40 maps identical) gave 13
 exhaustions to the plain copy's 22. They come from lanes and big-world turns already at ~2.4M, and
 the count swings with the game. Nothing reads positions or sightings yet; phase 3 is the consumer.
+
+## Correction (2026-10-26): phase 3 and 4 numbers below are wrong
+
+`tools/run_matches.py` rows are always from the first bot's point of view (`gems_a`, `deaths_a`,
+... are ours on both the -A and -B games). The summaries behind the 3a-4 tables below took the
+`_b` fields for side-B games, so half of each figure was v42's. Recomputed (vs v42, 80 games):
+
+| Version | W-L | margin/g | our deaths | v42 deaths | our exhaustions |
+|---|---|---|---|---|---|
+| phase 2 | 39-39 | -19 | 1,235 | 1,261 | 20 |
+| **3a, threat layer** | **43-35** | **+86** | 1,206 | 1,395 | 86 |
+| 3b, engage rule (horizon 2, guard) | 25-53 | -280 | 1,357 | 1,001 | 108 |
+| 3b without the guard | 17-61 | -310 | 1,693 | 963 | 76 |
+| 3c, focus fire on | 29-49 | -208 | 1,348 | 1,112 | 113 |
+| 4, macro with engage, old wards | 28-50 | -141 | 1,180 | 1,143 | 168 |
+| current code, engage and macro off | 39-39 | +69 | 1,183 | | 101 |
+| current code, engage off, macro on | 31-47 | -73 | 1,164 | | 133 |
+
+Only 3a is a gain. The engage rule, focus fire and the macro plan each lose; `ENGAGE_RULE`,
+`FOCUS_FIRE` and `MACRO` are off, which puts the bot back at 3a's level. The review scorecard's
+W-L and margin columns are unreliable too (they read the last turn record, before the final
+tributes); its per-team columns are fine.
 
 ## Phase 3 status (2026-10-26): done (3c focus fire built but off)
 
