@@ -915,6 +915,28 @@ class Actions:
             return ("STRENGTH", "FOCUS", "HEALTH")[code]
         return config.BUILD_STAT.get(self.w.kind_name, "STRENGTH")
 
+    def ward_plan(self):
+        """Phase 4: our ward stands on the pair's planned spot, on the lane between our farm and the
+        enemy (the top ten ward lanes, ~38 a game; we placed ~250 wherever we stood). Placed when
+        the charge is back and the spot is within placing reach, and only if it is not there yet."""
+        w = self.w
+        spot = w.ward_spot
+        if spot is None or w.at_spawn:
+            return False
+        if w.ward_pos is not None and w.ward_pos.x == spot.x and w.ward_pos.y == spot.y:
+            return False
+        try:
+            pos = w.me.position()
+            if pos.chebyshev_distance(spot) > config.WARD_PLACE_RANGE or w.me.ward_cooldown() > 0:
+                return False
+            if w.me.place_ward(spot):
+                w.ward_round = w.round
+                w.ward_pos = spot
+                return True
+        except Exception:
+            pass
+        return False
+
     def ward_often(self):
         """Vision: every other team places about 42 wards in the first 300 rounds, we placed 6.5
         (only while capturing). Drop one wherever we are once the charge is back and we have

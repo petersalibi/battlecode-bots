@@ -39,9 +39,11 @@ class Bot:
             if w.ready:
                 self.nav = navigation.Navigator(w)
                 self.act = actions.Actions(w, self.nav, self.d)
-                print("init: %s slot %d/%d groups=%d map=%dx%d dps=%d init_fuel=%s squad=%s%s" % (
+                print("init: %s slot %d/%d groups=%d map=%dx%d dps=%d init_fuel=%s squad=%s route=%s bank=%s ward=%s partners=%s%s" % (
                     w.kind_name, w.slot, w.n_bodies, len(w.groups), w.width, w.height, int(w.dps),
-                    w.init_profile, w.squad, (" plan=%s" % (w.plan,)) if config.LOG_GROUPS else ""), flush=True)
+                    w.init_profile, w.squad, w.route, (w.bank_altar.x, w.bank_altar.y) if w.bank_altar else None,
+                    (w.ward_spot.x, w.ward_spot.y) if w.ward_spot else None, w.partners,
+                    (" plan=%s" % (w.plan,)) if config.LOG_GROUPS else ""), flush=True)
             return
         if not w.near_ready and w.setup_alone():
             w.finish_init()
@@ -110,7 +112,9 @@ class Bot:
         self.act.run(mode, turn)
         self._publish(w, self.act.status, self.act.claim_group)
         self._stall_guard(mode)
-        if config.WARD_OFTEN and not w.channeling:
+        if config.MACRO_WARDS and not w.channeling and w.ward_spot is not None:
+            self.act.ward_plan()
+        elif config.WARD_OFTEN and not w.channeling:
             self.act.ward_often()
         if config.TURN_PRIORITY:
             self._set_priority(w, mode)

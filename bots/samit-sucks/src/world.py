@@ -12,6 +12,7 @@ from cambc import game_map, vision
 
 import budget
 import config
+import macro
 import memory_codec
 
 _fuel = _cambc.fuel_remaining          # setup profile only (logged, never branched on)
@@ -340,12 +341,44 @@ class World:
                 pass
         self.plan = memory_codec.decode_plan(bytes(cambc.DraftMemoryBuffer()))
         self.aggression = self.plan["aggression"]
+        self._init_macro()
         self.max_hp = me.max_health()
         self.strength = me.strength()
         self.focus = me.focus()
         self.dps = self._estimate_dps()
         self.init_profile.append(mark - _fuel())                                      # rest
         self.ready = True
+
+    def _init_macro(self):
+        """Our pair's part of the draft's macro plan (macro.py): its route, bank altar, ward spot,
+        and our partners' slots."""
+        self.route = []
+        self.route_set = set()
+        self.bank_altar = None
+        self.ward_spot = None
+        self.partners = []
+        plan = macro.decode(self.plan.get("macro", b"")) if config.MACRO else None
+        if plan is None or not plan["pairs"]:
+            return
+        n_pairs = len(plan["pairs"])
+        mine = plan["pairs"][min(self.slot // 2, n_pairs - 1)]
+        self.route = [i for i in mine["route"] if 0 <= i < len(self.groups)]
+        self.route_set = set(self.route)
+        if mine["altar"] is not None:
+            self.bank_altar = cambc.Vec2(*mine["altar"])
+        if mine["ward"] is not None:
+            self.ward_spot = cambc.Vec2(*mine["ward"])
+        self.partners = [s for s in range(self.n_bodies)
+                         if s != self.slot and min(s // 2, n_pairs - 1) == min(self.slot // 2, n_pairs - 1)]
+
+    def partner_claim(self, group_index):
+        """A partner claims this group (farming, capturing or holding there)."""
+        for s in self.partners:
+            if s < len(self.claims):
+                status, group = self.claims[s]
+                if group == group_index and status != memory_codec.STATUS_BUSY:
+                    return True
+        return False
 
     def _init_squads(self):
         """Fixed squads by slot (config.SQUADS): SQUAD_SIZE bodies each, the remainder joining the

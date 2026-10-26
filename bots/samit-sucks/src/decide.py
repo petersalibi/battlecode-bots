@@ -825,6 +825,14 @@ class Decider:
             score *= config.SQUAD_JOIN_BONUS                          # a squad mate is there: the squad stays together
         elif cand.claimed and not needs_help and not paired and not (config.COOP and w.help_called(g.index)):
             score *= config.CLAIMED_PENALTY                           # do not stack on an easy camp
+        if config.MACRO:
+            # Phase 4: the draft's plan. Our pair's route first; where a partner is, we go too.
+            if g.index in w.route_set:
+                score *= config.MACRO_ROUTE_BONUS
+            if w.partners and w.partner_claim(g.index):
+                score *= config.MACRO_PARTNER_BONUS
+                if cand.claimed and not needs_help and not paired:
+                    score /= config.CLAIMED_PENALTY or 1.0    # a partner on it is the pair, not stacking
         if self.target_group is not None and g.index == self.target_group.index:
             score *= 1.15                                             # finish what we started
         if config.DEATH_MEMORY and self.deaths:

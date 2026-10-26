@@ -12,7 +12,7 @@ micro as one influence evaluation per step, and a fixed fuel schedule.
 | 1 (done but quiet turn) | Skeleton on a fixed fuel budget per turn phase; no branch reads fuel remaining | a copy with dormant code mirrors 40-40 exactly; no exhaustions; quiet turn under ~400K |
 | 2 (done) | Shared memory: 5 position bytes (16x16 cells), enemy sighting cell + age, claims by round parity | logged ally positions match the replay within a cell and a round |
 | 3 (done) | Micro: camp-reach cost board, local influence sum (enemy reach, camp reach, sightings, objective, allies), engage rule, focus fire. No flee mode | cohort deaths down and allies at death up against a same-hour control |
-| 4 | Macro in the draft: map class, per-body group sequence and partner, bank altars, ward spots on lanes; re-plan only on events | cohort gem margin beats the greedy placeholder |
+| 4 (done) | Macro in the draft: map class, per-body group sequence and partner, bank altars, ward spots on lanes; re-plan only on events | cohort gem margin beats the greedy placeholder |
 | 5 | Switch the submission, tune weights one at a time | |
 
 ## Phase 0 status
@@ -218,6 +218,26 @@ every diverging map had exhaustions in the pair (a suspended turn loses its acti
 the turn cost. Lanes averages ~1.1M a turn in every version (3b adds ~40K); its worst turns are
 the old refresh (0.6-1.1M) plus the candidate rebuild in decide (~1.1M). Phase 4's routes are
 the way to drop the per-turn re-ranking.
+
+## Phase 4 status (2026-10-26): done (planned wards off)
+
+`macro.py` makes the plan on our first draft turn (4.5-10.7M of its 25M fuel; 26 bytes for two
+pairs) and carries it in draft memory from `MACRO_AT`: map class (share of camp value on the
+line between the spawns), pairs (slot 2k with 2k+1; an odd last body joins the pair before),
+per pair a route of up to six groups on our side (most value per tile of walk from where the
+route stands), a bank altar on our side nearest the route, and a ward spot on the line from the
+route to the enemy spawn where they are three turns further than us. In the game
+(`World._init_macro`): route groups score x1.5, a group a partner claims x1.5 and is not a stack,
+the bank altar counts six turns nearer, and (`MACRO_WARDS`) the ward goes on the spot.
+
+| vs v42, 80 games, same session | W-L | margin/g | deaths | our exhaustions |
+|---|---|---|---|---|
+| macro off (phase 3) | 43-35 | +57 | 1,128 | 87 |
+| macro, planned wards | 39-39 | +2 | 1,154 | 119 |
+| **macro, old wards (kept)** | **45-33** | **+86** | 1,122 | 125 |
+
+The routes and pairing gain a little (inside the noise of one batch); the planned ward spot
+loses. Exhaustions rose (routes walk further on lanes and big world); the turn cost was not cut.
 
 ## Phase 0 notes
 

@@ -175,6 +175,9 @@ class Turn:
                     turns = field.get(w.pos)
                     if turns != W.UNREACHABLE and (altar.x, altar.y) in locked:
                         turns += config.ALTAR_LOCK_PENALTY
+                    if turns != W.UNREACHABLE and config.MACRO and w.bank_altar is not None \
+                            and altar.x == w.bank_altar.x and altar.y == w.bank_altar.y:
+                        turns -= config.MACRO_ALTAR_SLACK          # the pair's bank, on our side: worth a detour
                     if turns < best_turns:
                         best, best_turns = (altar, turns), turns
             self._altar = best if best is not None else False

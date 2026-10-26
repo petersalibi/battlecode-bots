@@ -9,6 +9,7 @@ from cambc import game_map
 
 import config
 import draft_features
+import macro
 import memory_codec
 import nn
 import weights
@@ -339,6 +340,28 @@ def _body_stats(picks):
     return stats
 
 
+def _macro_plan(team_size):
+    """The macro plan: made on our first draft turn (ten times the fuel), carried over after."""
+    if not config.MACRO:
+        return None
+    try:
+        previous = memory_codec.decode_plan(bytes(cambc.DraftMemoryBuffer()))
+        if previous["team_size"] and previous["macro"][:2] == macro.MAGIC:
+            return previous["macro"]
+    except Exception:
+        pass
+    if _cambc.fuel_remaining() < config.MACRO_FUEL:
+        return None
+    try:
+        before = _cambc.fuel_remaining()
+        out = macro.plan(team_size)
+        print("draft: macro plan %d bytes, %d fuel" % (len(out), before - _cambc.fuel_remaining()), flush=True)
+        return out
+    except Exception as e:
+        print("draft: macro plan failed: %r" % (e,), flush=True)
+        return None
+
+
 def play():
     chosen = cambc.draft.current_draft(Team.ALLY)
     available = [pick for pick in range(config.N_DRAFT_PICKS) if pick not in chosen]
@@ -365,7 +388,9 @@ def play():
     picks = list(chosen) + [pick]
     team_size = cambc.draft.team_size()
     aggression = 170 if small_map else 90
-    plan = memory_codec.encode_plan(team_size, aggression, small_map, _body_stats(picks), dash_map, map_feats, _PLANNED)
+    plan_bytes = _macro_plan(team_size)
+    plan = memory_codec.encode_plan(team_size, aggression, small_map, _body_stats(picks), dash_map, map_feats, _PLANNED,
+                                    plan_bytes)
     cambc.draft_memory.submit(plan)
     print(f"draft: round {len(picks)}/{team_size} picked {Draft.to_string(pick) if hasattr(Draft, 'to_string') else pick} ({source})",
           flush=True)

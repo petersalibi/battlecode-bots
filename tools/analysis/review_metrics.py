@@ -14,6 +14,7 @@ fetch_ours.py and challenges.py). The selector picks which side of each game cou
     all (default without one)   both sides
     file                        side A for dumps named *-A.jsonl.gz, side B for *-B (run_matches.py
                                 names each match after the first bot's side)
+    otherfile                   the other side of the same (the opponent in a batch)
     Name One,Name Two           those teams, by name in the index
 
 Positions are true, not fogged: every champion's own turn record gives its position, and the
@@ -54,6 +55,9 @@ def sides_for(path, selector, index, us):
     if selector == "file":
         stem = os.path.basename(path).split(".")[0]
         return (0,) if stem.endswith("-A") else (1,) if stem.endswith("-B") else None
+    if selector == "otherfile":                 # the opponent in a run_matches.py batch
+        stem = os.path.basename(path).split(".")[0]
+        return (1,) if stem.endswith("-A") else (0,) if stem.endswith("-B") else None
     if selector == "won":
         return "won"
     entry = index.get(os.path.basename(path).split(".")[0]) if index else None
