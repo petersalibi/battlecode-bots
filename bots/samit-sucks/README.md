@@ -10,7 +10,7 @@ micro as one influence evaluation per step, and a fixed fuel schedule.
 |---|---|---|
 | 0 (done) | Seed from `hybrid-v42`, scorecard script, top-ten replays | v42 scorecard and top-ten scorecard side by side |
 | 1 (done but quiet turn) | Skeleton on a fixed fuel budget per turn phase; no branch reads fuel remaining | a copy with dormant code mirrors 40-40 exactly; no exhaustions; quiet turn under ~400K |
-| 2 | Shared memory: 5 position bytes (16x16 cells), enemy sighting cell + age, claims by round parity | logged ally positions match the replay within a cell and a round |
+| 2 (done) | Shared memory: 5 position bytes (16x16 cells), enemy sighting cell + age, claims by round parity | logged ally positions match the replay within a cell and a round |
 | 3 | Micro: camp-reach cost board, local influence sum (enemy reach, camp reach, sightings, objective, allies), engage rule, focus fire. No flee mode | cohort deaths down and allies at death up against a same-hour control |
 | 4 | Macro in the draft: map class, per-body group sequence and partner, bank altars, ward spots on lanes; re-plan only on events | cohort gem margin beats the greedy placeholder |
 | 5 | Switch the submission, tune weights one at a time | |
@@ -79,6 +79,46 @@ The remaining exhaustions are on lanes (42 groups) and yellow brick road, a hand
 
 Known v42 bug carried over: a hurt body in flee mode with an enemy at the edge of sight can stand
 still for the rest of the game (pilgrimage, 1,450 rounds). Phase 3 removes flee mode.
+
+## Phase 2 status (2026-10-26): done
+
+Shared memory now carries positions (layout in `memory_codec.py`):
+
+| Bytes | What |
+|---|---|
+| 0-4 | per body: its claim (status + group) or its position cell on a 16x16 grid |
+| 5 | enemy sighting: the cell of the enemy nearest the body that saw it |
+| 6 | sighting round mod 64 (bits 5-0) and enemies in sight 1-3+ (bits 7-6) |
+| 7 | bits 4-0: which of bytes 0-4 hold a claim |
+
+A body publishes its claim on the turn it changes (not twice running), every 32 rounds, and every
+turn while dead; otherwise its position. Every body keeps a `memory_codec.Board` (`w.board`) with
+each ally's latest claim and cell, how old the cell is (`board.age(k, round)`), and the sighting.
+`w.claims` is the board's claim list, so the old macro reads it unchanged. The plan said "claims by
+round parity"; the kind mask (byte 7) does the job better: positions go out on almost every turn
+and a changed claim goes out at once. The contested and break-out bytes are gone (their writers
+were all behind switches that are off; `w.contested` is always None).
+
+Check: `config.LOG_BOARD` on, then `python tools/run_matches.py samit-sucks hybrid@hybrid-v42 --debug
+--log-limit 50000000` and `python tools/analysis/board_check.py <run dir>`. 80 games, 1.65M
+beliefs about living allies:
+
+- 99.4% read this round or last, and **100.0% of those in the ally's cell now or one turn ago**.
+- 88.6% read as current (age 0): 100% in the right cell. 10.8% a round old (a claim turn): 62%.
+- Tile error: within 2 tiles 95.3%, within 5 tiles 99.9%.
+- The debug and release runs gave the same results game for game, so the logging is inert.
+
+Release results, 80 games each:
+
+| Test | Result |
+|---|---|
+| vs `hybrid@hybrid-v42` | 41-39, margin -19, deaths 1,235 vs 1,261, 20 exhaustions |
+| vs phase 1 (`samit-sucks@f7b4cf7`) | 45-35, margin +52, deaths 1,205 vs 1,214 |
+
+Board cost on lanes: read ~33K, publish ~20K a turn (the old claim code was ~15K). Exhaustions
+are not from that: phase 1 plus a ~30K-a-turn burn against phase 1 (37/40 maps identical) gave 13
+exhaustions to the plain copy's 22. They come from lanes and big-world turns already at ~2.4M, and
+the count swings with the game. Nothing reads positions or sightings yet; phase 3 is the consumer.
 
 ## Phase 0 notes
 

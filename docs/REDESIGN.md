@@ -102,6 +102,21 @@ Behaviour no longer depends on fuel, so:
 - A pure optimisation must mirror 40/40 against a copy of the code before it. Any divergence is
   a behaviour change (it caught one: a living camp in sight does not imply its group reads alive).
 
+## Phase 2: shared memory carrying positions
+
+Bytes 0-4 hold each body's claim or its position cell (16x16 grid), byte 7 says which; bytes 5-6
+an enemy sighting (cell, round mod 64, count). A claim goes out on the turn it changes, every 32
+rounds and while dead; positions on the other turns. Readers keep a `Board` across turns.
+
+- Accuracy (80 debug games, `tools/analysis/board_check.py`): 100% of beliefs at most a round old
+  are in the ally's cell now or one turn ago; 99.4% of beliefs are that fresh. A refresh every 8
+  rounds left 17% of beliefs a round old; every 32 rounds, 11%.
+- Results: 41-39 against v42 (margin -19), 45-35 against phase 1 (+52).
+- Cost ~50K a turn (read ~33K, publish ~20K) against ~15K for the old claims. Decoding is the
+  cost: an unchanged read is 11K, and something changes most rounds.
+- Exhaustions are not fuel-sensitive at this scale: phase 1 with a ~30K burn vs itself had 13 to
+  the plain copy's 22, in games identical on 37 of 40 maps. Lanes and big-world peak at ~2.4M.
+
 ## Measurements worth keeping
 
 ### Turn cost (v42, 208K profiled turns, 40 maps)

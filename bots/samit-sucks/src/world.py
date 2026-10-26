@@ -196,7 +196,8 @@ class World:
         self.leader_busy_group = -1    # the group the leader has been retreating from, and for how many rounds running
         self.leader_busy_rounds = 0
         self.middle_share = 0.0        # share of the camp groups on the centre line (_init_squads)
-        self.contested = None          # byte 6: (group index, rounds old) an enemy was last seen at
+        self.contested = None          # (group index, rounds old) an enemy was last seen at: no longer shared, always None
+        self.board = None              # memory_codec.Board: allies' claims and positions, the enemy sighting (init_static)
         self.help_calls = set()
         self.claim_counts = {}
         self.spawn_field_stale = False     # navigation.seal_holes: rebuild the spawn field when affordable
@@ -323,6 +324,7 @@ class World:
                 self.slot = index
                 break
         self.ally_champions = list(allies)
+        self.board = memory_codec.Board(self.width, self.height, self.slot)
         self._init_squads()
 
         self.kind = int(me.champion_name())
@@ -577,7 +579,8 @@ class World:
             self.nearest_enemy = None
             self.prev_hp = None
             self.damage_taken = 0.0
-            self.claims = memory_codec.read_claims()
+            self.board.read(self.round)
+            self.claims = self.board.claims
             return
 
         self.last_pos = getattr(self, "pos", None)
@@ -630,8 +633,8 @@ class World:
         self._refresh_camps()
         if profiling:
             marks.append(_fuel())
-        self.claims = memory_codec.read_claims()
-        self.contested = memory_codec.read_contested(self.round)
+        self.board.read(self.round)
+        self.claims = self.board.claims
         self._index_claims()
         if config.SQUADS:
             self._refresh_squad()

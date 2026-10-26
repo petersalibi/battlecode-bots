@@ -98,6 +98,7 @@ CAMP_CACHE_TURNS = 5        # reuse the camp candidate list for this many turns 
 LOG_DECISIONS = False       # print the camp ranking at every retarget (costs fuel; dev only)
 TRACE_SLOT = -1             # print a per-turn trace line for this body slot (dev only, -1 = off)
 LOG_GROUPS = False          # print the camp group table on the first turn (dev only)
+LOG_BOARD = False           # print each body's shared-memory picture every turn (debug builds only; board_check.py)
 
 # ---- Fighting ----------------------------------------------------------------
 FIGHT_POWER_RATIO = 1.25    # fight when our local power exceeds theirs by this factor

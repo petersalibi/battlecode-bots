@@ -1,14 +1,20 @@
 """Team memory layouts.
 
 Shared memory (8 bytes, read/write all match):
-    bytes 0-5   one claim byte per ally body, indexed by the body's position in cambc.champions(ALLY)
-                bits 7-6: status (STATUS_*), bits 5-0: claimed camp group index + 1 (0 = none)
-    byte 6      contested group: bits 5-0 the group index + 1 an enemy was last seen near (0 = none),
-                bits 7-6 the epoch (round // 4 mod 4) it was seen, so readers know how stale it is
-    A claim of STATUS_IDLE with a group is a call for help: the body is holding at a camp it
-    cannot clear alone, waiting for allies (actions.farm); helpers score that group up.
-    byte 7      break-out signal: bit 7 set, bits 6-0 the round (mod 128) a gated body decided the
-                team leaves spawn together (0 = none)
+    bytes 0-4   one byte per ally body, indexed by the body's position in cambc.champions(ALLY).
+                The byte carries either the body's claim or its position, as byte 7 says:
+                claim     bits 7-6: status (STATUS_*), bits 5-0: claimed camp group index + 1 (0 = none)
+                position  bits 7-4: cell x, bits 3-0: cell y, on a 16x16 grid over the map
+                A body publishes its claim on the turn it changes (a dead body every turn, and every
+                CLAIM_REFRESH rounds regardless) and its position on every other turn, so readers keep
+                both in a Board. A claim of STATUS_IDLE with a group is a call for help: the body is
+                holding at a camp it cannot clear alone, waiting for allies (actions.farm).
+    byte 5      enemy sighting: the cell of the enemy nearest the body that saw it
+    byte 6      bits 5-0 the round (mod 64) of the sighting, bits 7-6 how many enemies were in sight
+                (1, 2, 3 or more; 0 = no sighting yet)
+    byte 7      bits 4-0: bit k set = byte k holds a claim, clear = a position. Bits 7-5 unused.
+    A body's first publication is always a claim, so readers ignore its byte until they have seen
+    one (the zeroed memory would read as cell 0,0).
 
 Draft memory (1,024 bytes, written in the draft, read-only afterwards):
     b"HY1" magic, team size, aggression 0-255, map-size class, then per-body shard stat.
@@ -18,9 +24,14 @@ import cambc
 import config
 
 STATUS_IDLE, STATUS_FARM, STATUS_CAPTURE, STATUS_BUSY = range(4)   # BUSY = tribute, recall, dead
-MAX_BODIES = 6
+MAX_BODIES = 6          # claims per team in Board.claims (and the draft plan's per-body slots)
+SHARED_BODIES = 5       # bodies with a byte in shared memory: teams field 3 to 5
 NO_GROUP = -1
 _MAGIC = b"HY1"
+
+CELLS = 16              # position grid per axis
+CLAIM_REFRESH = 32      # rounds after which an unchanged claim is published again (a reader may miss a turn)
+SIGHTING_BYTE, SIGHTING_ROUND_BYTE, KIND_BYTE = 5, 6, 7
 
 
 def encode_claim(status, group_index):
@@ -33,44 +44,129 @@ def decode_claim(value):
 
 
 _CLAIMS = [decode_claim(v) for v in range(256)]   # every byte decoded once, at build time
+NO_CLAIM = _CLAIMS[0]
 
 
-def read_claims():
-    """List of (status, group_index) per body slot."""
-    data = bytearray(MAX_BODIES)
-    cambc.shared_memory.read(0, data)
-    return [_CLAIMS[v] for v in data]
+class Board:
+    """One body's picture of the shared memory, kept across turns: every ally's latest claim and
+    position (a byte carries only one of them at a time) and the latest enemy sighting. Most turns
+    the memory is as we last left it, so reading and publishing cost an engine call and a compare."""
+
+    def __init__(self, width, height, slot):
+        self.slot = slot
+        self.claims = [NO_CLAIM] * MAX_BODIES
+        self.seen = [False] * SHARED_BODIES        # a claim from this body has been read: its byte is live
+        self.cells = [None] * SHARED_BODIES        # (x, y) tile at the centre of the body's last cell
+        self.live = [False] * SHARED_BODIES        # the body's byte held its position at our last read
+        self.cell_round = [-1] * SHARED_BODIES     # the last round we read that byte as a position
+        self.sighting = None                       # ((x, y), enemies 1-3, round seen)
+        # Cell of a tile and the centre tile of a cell, per axis, built once.
+        self._cell_x = [x * CELLS // width for x in range(width)]
+        self._cell_y = [y * CELLS // height for y in range(height)]
+        self._centre_x = [((2 * c + 1) * width) // (2 * CELLS) for c in range(CELLS)]
+        self._centre_y = [((2 * c + 1) * height) // (2 * CELLS) for c in range(CELLS)]
+        self._data = bytearray(8)                  # the memory as read this turn (and then as we write it)
+        self._last = bytearray(8)                  # the memory as decoded last time
+        self._read_round = -1
+        # What this body last published: its claim byte and when.
+        self._claim_sent = -1
+        self._claim_round = -1000
+        self._claim_last_turn = False
+
+    def centre(self, value):
+        """The tile at the centre of a position byte's cell."""
+        return self._centre_x[value >> 4], self._centre_y[value & 15]
+
+    def cell_of(self, x, y):
+        return (self._cell_x[x] << 4) | self._cell_y[y]
+
+    def age(self, k, round_number):
+        """Rounds since body k's position was last read as current (0 = its byte holds it now)."""
+        return 0 if self.live[k] else round_number - self.cell_round[k]
+
+    def read(self, round_number):
+        """Once per turn, before publish: one engine read, decoded only when it changed."""
+        data, last = self._data, self._last
+        cambc.shared_memory.read(0, data)
+        previous_read, self._read_round = self._read_round, round_number
+        if data == last:
+            return
+        kinds = data[KIND_BYTE]
+        changed = kinds ^ last[KIND_BYTE]
+        for k in range(SHARED_BODIES):
+            value = data[k]
+            if value == last[k] and not changed >> k & 1:
+                continue
+            if kinds >> k & 1:
+                self.claims[k] = _CLAIMS[value]
+                self.seen[k] = True
+                if self.live[k]:
+                    self.live[k] = False
+                    self.cell_round[k] = previous_read
+            elif self.seen[k]:
+                self.cells[k] = (self._centre_x[value >> 4], self._centre_y[value & 15])
+                self.live[k] = True
+        if data[SIGHTING_BYTE] != last[SIGHTING_BYTE] or data[SIGHTING_ROUND_BYTE] != last[SIGHTING_ROUND_BYTE]:
+            count = data[SIGHTING_ROUND_BYTE] >> 6
+            if count:
+                seen_round = round_number - ((round_number - (data[SIGHTING_ROUND_BYTE] & 63)) & 63)
+                self.sighting = (self.centre(data[SIGHTING_BYTE]), count, seen_round)
+        last[:] = data
+
+    def publish(self, round_number, status, group_index, pos, dead=False):
+        """End of turn: our claim when it changed (not twice running, so the position still goes
+        out), when it is due a refresh, or when we are dead; otherwise our position. Only bytes
+        that change are written (nobody else writes between our read and this)."""
+        value = encode_claim(status, group_index)
+        claim = (dead or self._claim_sent < 0 or round_number - self._claim_round >= CLAIM_REFRESH
+                 or (value != self._claim_sent and not self._claim_last_turn))
+        self._claim_last_turn = claim
+        self.claims[self.slot] = _CLAIMS[value]
+        slot = self.slot
+        if slot >= SHARED_BODIES:
+            return
+        data = self._data
+        if claim:
+            self._claim_sent = value
+            self._claim_round = round_number
+            byte, kinds = value, data[KIND_BYTE] | (1 << slot)
+        else:
+            byte, kinds = (self._cell_x[pos.x] << 4) | self._cell_y[pos.y], data[KIND_BYTE] & ~(1 << slot)
+        # Our own bytes go into _last as well: next turn's read must not decode what we wrote.
+        if byte != data[slot]:
+            cambc.shared_memory[slot] = data[slot] = byte
+        self._last[slot] = byte
+        if kinds != data[KIND_BYTE]:
+            cambc.shared_memory[KIND_BYTE] = data[KIND_BYTE] = kinds
+        last = self._last
+        last[KIND_BYTE] = (last[KIND_BYTE] & ~(1 << slot)) | (kinds & (1 << slot))
+
+    def report_enemies(self, round_number, pos, count):
+        """We see `count` enemies, the nearest at pos: post it unless an ally posted a bigger
+        sighting this round already."""
+        count = 3 if count > 3 else count
+        sighting = self.sighting
+        if sighting is not None and sighting[2] == round_number and sighting[1] > count:
+            return
+        data, memory = self._data, cambc.shared_memory
+        cell, stamp = (self._cell_x[pos.x] << 4) | self._cell_y[pos.y], (count << 6) | (round_number & 63)
+        if cell != data[SIGHTING_BYTE]:
+            memory[SIGHTING_BYTE] = data[SIGHTING_BYTE] = cell
+        if stamp != data[SIGHTING_ROUND_BYTE]:
+            memory[SIGHTING_ROUND_BYTE] = data[SIGHTING_ROUND_BYTE] = stamp
+        self.sighting = (self.centre(cell), count, round_number)   # ours, as readers will decode it
+        self._last[SIGHTING_BYTE], self._last[SIGHTING_ROUND_BYTE] = cell, stamp
 
 
-def write_claim(slot, status, group_index):
-    if 0 <= slot < MAX_BODIES:
-        cambc.shared_memory[slot] = encode_claim(status, group_index)
-
-
-CONTEST_EPOCH = 4      # rounds per step of the 2-bit age: a call reads as at most 3 rounds old in its own step
-                       # (it was 32: a call posted this round read as up to 31 rounds old, so the alert and the
-                       # party capture, answered only while 4-6 rounds fresh, were almost never answered)
-
-
-def write_contested(group_index, round_number):
-    """An enemy is near this camp group: byte 6 carries the group and the epoch it was seen."""
-    if 0 <= group_index <= 62:
-        cambc.shared_memory[6] = (group_index + 1) | (((round_number // CONTEST_EPOCH) & 3) << 6)
+def write_contested(group_index, round_number):   # kept for callers (all behind switches that are off);
+    pass                                           # byte 6 now holds the enemy sighting
 
 
 def read_contested(round_number):
-    """(group index, rounds old at most) of the last contested group, or None."""
-    value = cambc.shared_memory[6]
-    group = (value & 63) - 1
-    if group < 0:
-        return None
-    epochs_ago = ((round_number // CONTEST_EPOCH) - (value >> 6)) & 3
-    if epochs_ago >= 3:
-        return None                                   # too stale to tell from a wrap-around
-    return group, epochs_ago * CONTEST_EPOCH + (round_number % CONTEST_EPOCH)
+    return None
 
 
-def write_enemy_seen(round_number):           # kept for callers; byte 6 now holds the contested group
+def write_enemy_seen(round_number):           # kept for callers; byte 5 now holds the enemy sighting
     pass
 
 
@@ -78,16 +174,12 @@ def read_enemy_seen():
     return 0
 
 
-def write_breakout(round_number):
-    cambc.shared_memory[7] = 0x80 | (round_number & 0x7F)
+def write_breakout(round_number):             # kept for callers (BREAKOUT_SIGNAL is off); byte 7 is the kind mask
+    pass
 
 
 def breakout_age(round_number):
-    """Rounds since the last break-out signal, or None when there is none."""
-    value = cambc.shared_memory[7]
-    if not value & 0x80:
-        return None
-    return (round_number - (value & 0x7F)) & 0x7F
+    return None
 
 
 # ---- Draft memory -------------------------------------------------------------
@@ -136,7 +228,7 @@ def default_plan():
     return decode_plan(b"")
 
 
-__all__ = ["STATUS_IDLE", "STATUS_FARM", "STATUS_CAPTURE", "STATUS_BUSY", "read_claims", "write_claim",
+__all__ = ["STATUS_IDLE", "STATUS_FARM", "STATUS_CAPTURE", "STATUS_BUSY", "Board",
            "write_enemy_seen", "read_enemy_seen", "write_contested", "read_contested", "write_breakout", "breakout_age",
            "encode_plan", "decode_plan",
            "default_plan", "config"]

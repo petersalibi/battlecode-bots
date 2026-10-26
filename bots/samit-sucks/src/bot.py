@@ -58,7 +58,8 @@ class Bot:
                 self.d.was_alive = False
                 self.d.record_death(w.round)
             self.act.shop()
-            memory_codec.write_claim(w.slot, memory_codec.STATUS_BUSY, -1)
+            w.board.publish(w.round, memory_codec.STATUS_BUSY, -1, w.pos, dead=True)
+            self._log_board(w)
             if config.TRACE_SLOT == w.slot:
                 print("trace r%d dead gold=%d" % (w.round, w.gold), flush=True)
             return
@@ -72,7 +73,7 @@ class Bot:
                 pass
         if w.channeling:
             # Recall, tribute or teleport in progress: leave it running.
-            memory_codec.write_claim(w.slot, memory_codec.STATUS_BUSY, -1)
+            self._publish(w, memory_codec.STATUS_BUSY, -1)
             if config.TRACE_SLOT == w.slot:
                 print("trace r%d channeling state=%d hp=%d gems=%d pos=%d,%d" % (
                     w.round, int(w.me.state()), int(w.hp), w.gems, w.pos.x, w.pos.y), flush=True)
@@ -107,7 +108,7 @@ class Bot:
             if g is not None and g.anchor is not None and w.pos.chebyshev_distance(g.anchor) <= config.CONTEST_NEAR:
                 memory_codec.write_contested(g.index, w.round)
         self.act.run(mode, turn)
-        memory_codec.write_claim(w.slot, self.act.status, self.act.claim_group)
+        self._publish(w, self.act.status, self.act.claim_group)
         self._stall_guard(mode)
         if config.WARD_OFTEN and not w.channeling:
             self.act.ward_often()
@@ -152,6 +153,18 @@ class Bot:
             if w.fields_changed:
                 w.fields_changed = False
                 self.nav.fields.clear()
+
+    def _publish(self, w, status, group):
+        """End of a living turn: our claim or position to the board, and what we see of the enemy."""
+        w.board.publish(w.round, status, group, w.pos)
+        if w.enemies:
+            w.board.report_enemies(w.round, w.nearest_enemy.pos, len(w.enemies))
+        self._log_board(w)
+
+    def _log_board(self, w):
+        if config.LOG_BOARD:
+            # Free in release builds; tools/analysis/board_check.py compares it with the truth.
+            cambc.debug_block(lambda: print(_board_line(w), flush=True))
 
     def _set_priority(self, w, mode):
         """Turn order within the team (set_priority applies from next round and persists): a body
@@ -206,3 +219,18 @@ class Bot:
         d.capture_group = None
         d.camp_cache = None
         d.idle_turns = 0
+
+
+def _board_line(w):
+    """board r<round> s<slot> <x>,<y>|dead <w>x<h> then k:x,y,age per ally we hold a position for,
+    and e:x,y,count,age for the sighting."""
+    b = w.board
+    parts = ["board r%d s%d %s %dx%d" % (w.round, w.slot, "%d,%d" % (w.pos.x, w.pos.y) if w.alive else "dead",
+                                         w.width, w.height)]
+    for k in range(min(w.n_bodies, memory_codec.SHARED_BODIES)):
+        if k != w.slot and b.cells[k] is not None:
+            parts.append("%d:%d,%d,%d" % (k, b.cells[k][0], b.cells[k][1], b.age(k, w.round)))
+    if b.sighting is not None:
+        (x, y), count, seen = b.sighting
+        parts.append("e:%d,%d,%d,%d" % (x, y, count, w.round - seen))
+    return " ".join(parts)
