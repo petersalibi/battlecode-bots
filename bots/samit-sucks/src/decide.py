@@ -230,6 +230,8 @@ class Decider:
         mask = self.masks(w, turn)
         self.last_mask = mask
         self.last_scores = None
+        if config.ENGAGE_RULE:
+            return self._choose_engage(w, turn, mask)
         # Hard rule: a badly hurt champion with an enemy close by runs, and keeps running while
         # the enemy is in sight (hysteresis stops flee flipping back every other turn).
         if w.enemies and not w.at_spawn:
@@ -353,6 +355,81 @@ class Decider:
             if explored is not None:
                 chosen, source = explored, "explore"
         return self._set_mode(chosen, source)
+
+    # ---- phase 3b: one engage rule, no flee mode -----------------------------------------
+    def _choose_engage(self, w, turn, mask):
+        """The whole mode choice with the engage rule: fight when engaging pays, go home when
+        hurt, otherwise the objective the script scores best. Keeping away from enemies we do not
+        engage is the threat layer's job (micro.py, Actions.guard), not a mode."""
+        if config.SPAWN_GATE and w.at_spawn and w.enemies and w.enemy_within(config.SPAWN_GATE_RANGE):
+            mode = self._spawn_gate(w)
+            if mode is not None:
+                return self._set_mode(mode, "gate")
+        else:
+            self.gated_since = -1
+        engaged = self._engage(w, turn)
+        if engaged is not None:
+            return engaged
+        if config.CAPTURE_OWN_CLEAR and mask[CAPTURE] and not w.at_spawn:
+            g0, travel = turn.captures()[0]
+            mine = self.target_group is not None and g0.index == self.target_group.index
+            if travel <= config.CAPTURE_OWN_TRAVEL and (mine or travel == 0):
+                if not w.enemies or w.power_balance() >= config.CAPTURE_OWN_BALANCE:
+                    return self._set_mode(CAPTURE, "own-clear")
+        if (w.enemies and self.mode in (FARM, CAPTURE, TRIBUTE) and mask[self.mode]
+                and self.mode_turns % config.ENGAGE_RESCORE_TURNS != config.ENGAGE_RESCORE_TURNS - 1):
+            # In contact the objective holds: the script (a candidate rebuild, ~450K) re-scores it
+            # every few turns, as the old flee and fight rules skipped it altogether.
+            return self._set_mode(self.mode, "hold")
+        scores = self.script_scores(w, turn)
+        self.last_scores = scores
+        objective = list(mask)
+        objective[FIGHT] = objective[FLEE] = False
+        chosen = nn.masked_argmax(scores, objective)
+        return self._set_mode(FARM if chosen is None else chosen, "script")
+
+    def _engage(self, w, turn):
+        """FIGHT, RECALL (home) or None (the objective). Replaces the hard flee rules, the contact
+        head, the commitment, outnumbered, squad, early-leave, pair and chase rules."""
+        if w.at_spawn:
+            return None
+        if not w.enemies:
+            if self.camp_overrun(w) or (self.camp_hitting(w) and w.hp_ratio < config.FLEE_HEALTH):
+                if self.target_group is not None:
+                    self.target_group.avoid_until = w.round + config.CAMP_FLEE_AVOID_ROUNDS
+                    self.target_group = None
+                    self.camp_cache = None
+                return self._set_mode(RECALL, "camp-home")
+            return None
+        if w.hp_ratio < config.FLEE_HEALTH and w.enemy_within(config.FLEE_ENEMY_RANGE):
+            if config.STAND_GROUND and self.should_stand(w):
+                return self._set_mode(FIGHT, "doomed" if self.doomed else "stand")
+            return self._set_mode(RECALL, "hurt-home")
+        if self.mode == RECALL and w.hp_ratio < config.RECALL_HEALTH:
+            return self._set_mode(RECALL, "hurt-home")       # keep going home while enemies are about
+        targets = turn.fight_targets()
+        if not targets:
+            return None
+        balance = w.power_balance()
+        weakest = min(targets, key=lambda e: e.hp / e.max_hp if e.max_hp else 1.0)
+        if (weakest.hp / max(weakest.max_hp, 1) < config.KILL_STEAL_HEALTH and weakest.dist <= config.CHASE_RANGE
+                and w.hp_ratio >= config.CHASE_MIN_HEALTH and balance >= config.ENGAGE_KILL_BALANCE):
+            return self._set_mode(FIGHT, "kill")
+        if balance >= config.FIGHT_POWER_RATIO and w.hp_ratio >= config.FIGHT_MIN_HEALTH:
+            return self._set_mode(FIGHT, "engage")
+        if self.mode == FIGHT and balance >= config.FIGHT_STAY_RATIO and w.hp_ratio >= config.FLEE_HEALTH:
+            return self._set_mode(FIGHT, "stay")
+        if w.hp_ratio >= config.PAIR_MIN_HEALTH and balance >= config.ENGAGE_JOIN_BALANCE:
+            for pos, hp, strength, d in w.allies:
+                if d <= config.PAIR_JOIN_RANGE and hp > 0:
+                    for e in w.enemies:
+                        if e.pos.chebyshev_distance(pos) <= 3:
+                            return self._set_mode(FIGHT, "join")
+        if balance >= 1.0:
+            for e in targets:
+                if e.dist <= w.attack_range:
+                    return self._set_mode(FIGHT, "trade")
+        return None
 
     def _explore(self, w, mask, chosen):
         """Self-play exploration (data runs only): with probability MODE_EXPLORE, another legal
@@ -901,14 +978,18 @@ class Decider:
                     self.fight_source = "chase"
                     return enemy
         doomed = getattr(self, "doomed", False) and self.mode == FIGHT
+        focus = w.board.focus_cell(w.round) if config.FOCUS_FIRE and w.board is not None else -1
         for enemy in targets:
             in_range = enemy.dist <= w.attack_range
-            if doomed:
+            if focus >= 0 and w.board.cell_of(enemy.pos.x, enemy.pos.y) == focus:
+                # An ally in this fight is attacking the enemy in that cell: the same one, after reach.
+                key = (1 if in_range else 0, 1, -(enemy.hp / max(enemy.max_hp, 1)), enemy.gems, -enemy.dist)
+            elif doomed:
                 # Last stand: the kill we can still finish (100 gold) over anything else, then the
                 # most damage per turn we can land, so only targets in reach count.
-                key = (1 if in_range else 0, -enemy.ehp, enemy.gems, -enemy.dist)
+                key = (1 if in_range else 0, 0, -enemy.ehp, enemy.gems, -enemy.dist)
             else:
-                key = (1 if in_range else 0, -(enemy.hp / max(enemy.max_hp, 1)), enemy.gems, -enemy.dist)
+                key = (1 if in_range else 0, 0, -(enemy.hp / max(enemy.max_hp, 1)), enemy.gems, -enemy.dist)
             if best_key is None or key > best_key:
                 best, best_key = enemy, key
         self.fight_source = "script"

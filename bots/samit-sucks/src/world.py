@@ -853,10 +853,33 @@ class World:
         # Damage per turn from living camps that have us in reach (3 for wolves, 4 for elks and
         # golems, 5 for monoliths). They only hit when awake, so pair this with damage_taken.
         incoming = 0.0
-        for camp, gi, pos, hp in self.visible_camps:
-            if hp > 0 and pos.chebyshev_distance(self.pos) <= self.groups[gi].attack_range:
+        if config.CAMP_NEAREST_RULE:
+            # Measured (memory: camp-targeting-rules): an awake camp hits the champion nearest it
+            # by Chebyshev distance among those in its reach; a tie counts half here.
+            awake = None
+            for camp, gi, pos, hp in self.visible_camps:
                 g = self.groups[gi]
-                incoming += g.total_strength / max(g.n_camps, 1)
+                d = pos.chebyshev_distance(self.pos)
+                if hp <= 0 or d > g.attack_range:
+                    continue
+                if awake is None:
+                    awake = vision.awake_camp_tiles()
+                if not awake.is_set(pos):
+                    continue
+                share = 1.0
+                for other in [a[0] for a in self.allies] + [e.pos for e in self.enemies]:
+                    od = pos.chebyshev_distance(other)
+                    if od < d:
+                        share = 0.0
+                        break
+                    if od == d:
+                        share = 0.5
+                incoming += share * g.total_strength / max(g.n_camps, 1)
+        else:
+            for camp, gi, pos, hp in self.visible_camps:
+                if hp > 0 and pos.chebyshev_distance(self.pos) <= self.groups[gi].attack_range:
+                    g = self.groups[gi]
+                    incoming += g.total_strength / max(g.n_camps, 1)
         self.camp_damage_incoming = incoming
 
     # ---- derived -----------------------------------------------------------------

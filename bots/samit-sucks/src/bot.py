@@ -158,7 +158,11 @@ class Bot:
         """End of a living turn: our claim or position to the board, and what we see of the enemy."""
         w.board.publish(w.round, status, group, w.pos)
         if w.enemies:
-            w.board.report_enemies(w.round, w.nearest_enemy.pos, len(w.enemies))
+            target = self.act.focus_target
+            if config.FOCUS_FIRE and target is not None:
+                w.board.report_enemies(w.round, target.pos, len(w.enemies), focus=True)
+            else:
+                w.board.report_enemies(w.round, w.nearest_enemy.pos, len(w.enemies))
         self._log_board(w)
 
     def _log_board(self, w):

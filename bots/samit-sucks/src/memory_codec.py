@@ -12,7 +12,9 @@ Shared memory (8 bytes, read/write all match):
     byte 5      enemy sighting: the cell of the enemy nearest the body that saw it
     byte 6      bits 5-0 the round (mod 64) of the sighting, bits 7-6 how many enemies were in sight
                 (1, 2, 3 or more; 0 = no sighting yet)
-    byte 7      bits 4-0: bit k set = byte k holds a claim, clear = a position. Bits 7-5 unused.
+    byte 7      bits 4-0: bit k set = byte k holds a claim, clear = a position. Bit 7: bytes 5-6
+                are a focus call (the enemy a fighting ally is attacking), not a plain sighting.
+                Bits 6-5 unused.
     A body's first publication is always a claim, so readers ignore its byte until they have seen
     one (the zeroed memory would read as cell 0,0).
 
@@ -32,6 +34,7 @@ _MAGIC = b"HY1"
 CELLS = 16              # position grid per axis
 CLAIM_REFRESH = 32      # rounds after which an unchanged claim is published again (a reader may miss a turn)
 SIGHTING_BYTE, SIGHTING_ROUND_BYTE, KIND_BYTE = 5, 6, 7
+FOCUS_BIT = 0x80
 
 
 def encode_claim(status, group_index):
@@ -60,6 +63,7 @@ class Board:
         self.live = [False] * SHARED_BODIES        # the body's byte held its position at our last read
         self.cell_round = [-1] * SHARED_BODIES     # the last round we read that byte as a position
         self.sighting = None                       # ((x, y), enemies 1-3, round seen)
+        self.focus = None                          # ((x, y) cell centre, round) of the last focus call
         # Cell of a tile and the centre tile of a cell, per axis, built once.
         self._cell_x = [x * CELLS // width for x in range(width)]
         self._cell_y = [y * CELLS // height for y in range(height)]
@@ -106,11 +110,14 @@ class Board:
             elif self.seen[k]:
                 self.cells[k] = (self._centre_x[value >> 4], self._centre_y[value & 15])
                 self.live[k] = True
-        if data[SIGHTING_BYTE] != last[SIGHTING_BYTE] or data[SIGHTING_ROUND_BYTE] != last[SIGHTING_ROUND_BYTE]:
+        if data[SIGHTING_BYTE] != last[SIGHTING_BYTE] or data[SIGHTING_ROUND_BYTE] != last[SIGHTING_ROUND_BYTE] \
+                or (kinds ^ last[KIND_BYTE]) & FOCUS_BIT:
             count = data[SIGHTING_ROUND_BYTE] >> 6
             if count:
                 seen_round = round_number - ((round_number - (data[SIGHTING_ROUND_BYTE] & 63)) & 63)
                 self.sighting = (self.centre(data[SIGHTING_BYTE]), count, seen_round)
+                if kinds & FOCUS_BIT:
+                    self.focus = (self.sighting[0], seen_round)
         last[:] = data
 
     def publish(self, round_number, status, group_index, pos, dead=False):
@@ -141,20 +148,37 @@ class Board:
         last = self._last
         last[KIND_BYTE] = (last[KIND_BYTE] & ~(1 << slot)) | (kinds & (1 << slot))
 
-    def report_enemies(self, round_number, pos, count):
+    def focus_cell(self, round_number):
+        """The cell value of a focus call made this round or last, else -1."""
+        if self.focus is None or round_number - self.focus[1] > 1:
+            return -1
+        x, y = self.focus[0]
+        return (self._cell_x[x] << 4) | self._cell_y[y]
+
+    def report_enemies(self, round_number, pos, count, focus=False):
         """We see `count` enemies, the nearest at pos: post it unless an ally posted a bigger
-        sighting this round already."""
+        sighting this round already, or a focus call this round or last. focus: pos is the enemy
+        we are attacking, and allies in the fight should attack it too."""
         count = 3 if count > 3 else count
         sighting = self.sighting
-        if sighting is not None and sighting[2] == round_number and sighting[1] > count:
-            return
+        if not focus:
+            if sighting is not None and sighting[2] == round_number and sighting[1] > count:
+                return
+            if self.focus is not None and round_number - self.focus[1] <= 1:
+                return
         data, memory = self._data, cambc.shared_memory
+        kinds = (data[KIND_BYTE] | FOCUS_BIT) if focus else (data[KIND_BYTE] & ~FOCUS_BIT)
+        if kinds != data[KIND_BYTE]:
+            memory[KIND_BYTE] = data[KIND_BYTE] = kinds
+            self._last[KIND_BYTE] = (self._last[KIND_BYTE] & ~FOCUS_BIT) | (kinds & FOCUS_BIT)
         cell, stamp = (self._cell_x[pos.x] << 4) | self._cell_y[pos.y], (count << 6) | (round_number & 63)
         if cell != data[SIGHTING_BYTE]:
             memory[SIGHTING_BYTE] = data[SIGHTING_BYTE] = cell
         if stamp != data[SIGHTING_ROUND_BYTE]:
             memory[SIGHTING_ROUND_BYTE] = data[SIGHTING_ROUND_BYTE] = stamp
         self.sighting = (self.centre(cell), count, round_number)   # ours, as readers will decode it
+        if focus:
+            self.focus = (self.sighting[0], round_number)
         self._last[SIGHTING_BYTE], self._last[SIGHTING_ROUND_BYTE] = cell, stamp
 
 

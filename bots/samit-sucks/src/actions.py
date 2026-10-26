@@ -10,6 +10,7 @@ import escape_features
 import nn
 import weights
 import memory_codec
+import micro as M
 import world as W
 from config import FARM, CAPTURE, TRIBUTE, RECALL, FIGHT, FLEE
 
@@ -29,6 +30,7 @@ class Actions:
     def run(self, mode, turn):
         self.status = memory_codec.STATUS_IDLE
         self.claim_group = -1
+        self.focus_target = None    # the enemy we attacked this fight turn: posted as a focus call (bot._publish)
         self.trace = ""
         self.acted = False          # attacked or cast this turn
         self.waiting = False        # standing still on purpose (capturing, holding for allies)
@@ -38,8 +40,11 @@ class Actions:
             # a fight steps with the threat off, a retreat weighs it heavier.
             g = self.d.target_group if mode == config.FARM else self.d.capture_group if mode == config.CAPTURE else None
             weight = (config.MICRO_FIGHT_WEIGHT if mode == config.FIGHT else
-                      config.MICRO_FLEE_WEIGHT if mode == config.FLEE else config.MICRO_THREAT_WEIGHT)
+                      config.MICRO_FLEE_WEIGHT if mode == config.FLEE or (mode == config.RECALL and config.ENGAGE_RULE)
+                      else config.MICRO_THREAT_WEIGHT)
             self.nav.micro.turn_reset(g.index if g is not None else -1, weight)
+            if config.ENGAGE_RULE and mode in (config.FARM, config.CAPTURE, config.TRIBUTE):
+                self.guard(mode)
         handler = (self.farm, self.capture, self.tribute, self.recall, self.fight, self.flee)[mode]
         handler(turn)
 
@@ -533,6 +538,15 @@ class Actions:
                 if tile is not None and not self.nav.blocked().is_set(tile):
                     self.nav._move(tile)
             return
+        if config.ENGAGE_RULE and (w.enemies or w.damage_taken > 0):
+            # What flee did, now part of going home: shield, stun the nearest pursuer, a parting
+            # shot, then walk home through the threat layer. A channel starts only once nothing hits us.
+            self._retreat_tactics()
+            if (w.turns_to_spawn <= config.RECALL_MIN_SPAWN_TURNS or w.damage_taken > 0
+                    or w.enemy_within(config.RECALL_SAFE_ENEMY_TURNS)):
+                self.nav.step_along(w.spawn_field)
+                self.nav.try_dash(w.spawn_field)
+                return
         if w.turns_to_spawn <= config.RECALL_MIN_SPAWN_TURNS:
             self.nav.step_along(w.spawn_field)
             self.nav.try_dash(w.spawn_field)
@@ -552,6 +566,7 @@ class Actions:
         target = self.d.choose_fight_target(turn, w)
         if target is None:
             return self.farm(turn)
+        self.focus_target = target
         self.status = memory_codec.STATUS_FARM
         if config.SQUADS and self.d.target_group is not None:
             self.claim_group = self.d.target_group.index           # the squad's plan survives the fight
@@ -706,6 +721,58 @@ class Actions:
                 if e.pos.chebyshev_distance(pos) <= w.attack_range:
                     self._attack_with_reset(e.champion, e.pos)
                     break
+
+    def guard(self, mode):
+        """Before an objective action, with an enemy about: when the damage that could land where we
+        stand is worth more than acting here (a capture under way, a camp in reach), step away
+        first, through the threat layer towards home and allies. The action then still attacks
+        or casts if it can. The layer otherwise only votes inside a step, and a body capturing or
+        standing at its camp never steps (phase 3b, first try: 18-60 vs v42)."""
+        w, m = self.w, self.nav.micro
+        if not w.enemies or w.at_spawn or not w.can_move or w.cast_exclusive or w.channeling:
+            return
+        if not m.danger():
+            return
+        cost = m.cost * m.damage_here()
+        stay = 0.0
+        if mode == config.CAPTURE and self.d.capture_group is not None and self.d.capture_group.tiles.is_set(w.pos):
+            stay = config.GUARD_CAPTURE_VALUE
+        elif mode == config.FARM and self._camps_in_range(self.d.target_group.index if self.d.target_group else None):
+            stay = config.GUARD_FARM_VALUE
+        if cost <= max(config.GUARD_MIN, stay):
+            return
+        field = w.spawn_field
+        if field.get(w.pos) in (0, W.UNREACHABLE):
+            return
+        tile = m.step(field, W.UNREACHABLE, stay)
+        if tile is M.PASS:
+            moved = self.nav.step_along(field)
+        else:
+            moved = tile is not None and self.nav._move(tile)
+        if moved:
+            w.can_move = False                      # the action may still attack or cast
+            self.trace += " guard"
+
+    def _retreat_tactics(self):
+        """Shield when hit, stun the nearest pursuer, and (melee) hit an adjacent enemy before
+        stepping away: the engine allows attack then move."""
+        w = self.w
+        if w.damage_taken > 0:
+            self._cast_shield()
+        nearest = w.nearest_enemy
+        if nearest is None:
+            return
+        for rec in w.abilities:
+            if rec.is_cc and rec.enemies and nearest.dist <= rec.range and self._ready(rec) and not rec.exclusive:
+                self._cast(rec, nearest.champion)
+                break
+        if config.PARTING_SHOT and not w.is_ranged and w.can_attack:
+            shot, shot_hp = None, None
+            for e in w.enemies:
+                if e.dist <= 1 and (shot_hp is None or e.ehp < shot_hp):
+                    shot, shot_hp = e, e.ehp
+            if shot is not None and self._attack_with_reset(shot.champion, shot.pos):
+                self.trace += " shot"
 
     def _escape_step(self, threats):
         """The escape head's step: the candidate tile (stand still or a free neighbour) with the

@@ -6,7 +6,8 @@ A step is scored over the tiles we can reach (standing still and the free neighb
     - damage that could land on the tile next turn, as a share of our effective health
     + allies within reach of the tile, while there is danger about
 
-Damage comes from visible enemies (their reach plus one step), awake camps for which we would be
+Damage comes from visible enemies (their reach plus one step; outnumbered, their influence runs
+MICRO_HORIZON further, towards sight range, at a soft share), awake camps for which we would be
 the nearest champion in reach (memory: camp-targeting-rules; a tie counts half), and the shared
 enemy sighting when no enemy is in sight, its reach growing and its weight fading with age. No
 whole-board map: only the handful of tiles about to be chosen between are scored.
@@ -37,10 +38,17 @@ class Micro:
         (the wasm interpreter makes every attribute, call and config lookup count)."""
         w = self.w
         self._built = True
-        soft_range, soft_share = config.MICRO_SOFT_RANGE, config.MICRO_SOFT_SHARE
+        soft_share = config.MICRO_SOFT_SHARE
+        # Outnumbered, an enemy's soft reach runs towards sight range: turn away early, not when hurt.
+        self.outnumbered = bool(w.enemies) and w.power_balance() < 1.0
+        soft_range = config.MICRO_HORIZON if self.outnumbered else config.MICRO_SOFT_RANGE
         # Enemies and the sighting: (x, y, reach next turn, soft reach, damage, soft damage).
+        # A fixed budget: the nearest MICRO_MAX_SOURCES enemies only.
         sources = []
-        for e in w.enemies:
+        enemies = w.enemies
+        if len(enemies) > config.MICRO_MAX_SOURCES:
+            enemies = sorted(enemies, key=lambda e: e.dist)[:config.MICRO_MAX_SOURCES]
+        for e in enemies:
             reach = e.reach + 1
             sources.append((e.pos.x, e.pos.y, reach, reach + soft_range, e.dmg, e.dmg * soft_share))
         if not w.enemies and w.board is not None and w.board.sighting is not None:
@@ -75,6 +83,10 @@ class Micro:
                         if d < nearest:
                             nearest = d
                     camps.append((cx, cy, reach, nearest, g.total_strength / max(g.n_camps, 1)))
+            if len(camps) > config.MICRO_MAX_CAMPS:
+                px, py = w.pos.x, w.pos.y
+                camps.sort(key=lambda c: max(abs(c[0] - px), abs(c[1] - py)))
+                del camps[config.MICRO_MAX_CAMPS:]
         self.sources = sources
         self.camps = camps
         self.cost = self.weight / max(1.0, w.my_ehp())      # score per point of damage
@@ -85,11 +97,33 @@ class Micro:
             self._build()
         return bool(self.sources or self.camps)
 
+    def damage_here(self):
+        """Damage that could land where we stand next turn, soft reaches included."""
+        if not self._built:
+            self._build()
+        x, y = self.w.pos.x, self.w.pos.y
+        damage = 0.0
+        for tx, ty, reach, soft, dmg, soft_dmg in self.sources:
+            d = max(abs(tx - x), abs(ty - y))
+            if d <= reach:
+                damage += dmg
+            elif d <= soft:
+                damage += soft_dmg
+        for cx, cy, reach, nearest, dmg in self.camps:
+            d = max(abs(cx - x), abs(cy - y))
+            if d <= reach:
+                if d < nearest:
+                    damage += dmg
+                elif d == nearest:
+                    damage += 0.5 * dmg
+        return damage
+
     # ---- choosing a step ------------------------------------------------------------
-    def step(self, field, unreachable):
+    def step(self, field, unreachable, stay_bonus=0.0):
         """The best of standing still and the free neighbours, scored against `field` (walking
         turns to the objective). Returns PASS when no threat or ally tells the tiles apart (the
-        caller paths as usual), None to stand still, or the tile to step to.
+        caller paths as usual), None to stand still, or the tile to step to. stay_bonus is what
+        staying is worth beyond the field (acting here: a capture, a camp in reach).
 
         A source whose edge does not pass through our 3x3 neighbourhood adds the same to every
         tile, so only sources with an edge here are scored (a tile costs ~13K fuel to score)."""
@@ -131,7 +165,7 @@ class Micro:
         for tile in self.nav.blocked().reachable_tiles(pos, 1).positions():
             x, y = tile.x, tile.y
             if x == px and y == py:
-                value = here
+                value = here - stay_bonus / progress_value
             else:
                 value = field.get(tile)
                 if value == unreachable:
