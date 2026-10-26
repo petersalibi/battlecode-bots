@@ -8,6 +8,7 @@ import cambc
 from cambc import vision
 
 import config
+import micro as M
 import world as W
 
 Bitboard = cambc.Bitboard
@@ -25,10 +26,12 @@ class Navigator:
         self._blocked = None
         self._from_me = None
         self._from_me_round = -1
+        self.micro = M.Micro(world, self)
 
     def turn_reset(self):
         self._blocked = None
         self._from_me = None
+        self.micro.turn_reset()
         if self.sealed and self.w.round - self.sealed[0][1] >= config.SEAL_ROUNDS:
             # A seal is a guess that the hole cannot be crossed; kept for the whole game it trapped
             # a body inside a ring of holes on big world for 1,000 rounds (the exit was sealed from
@@ -136,6 +139,12 @@ class Navigator:
         here = field.get(w.pos)
         if here == 0:
             return False
+        if config.MICRO and here != W.UNREACHABLE and self.micro.weight > 0 and self.micro.danger():
+            # Something could hurt us: the threat layer picks the step (or standing still), unless
+            # nothing near tells the tiles apart.
+            tile = self.micro.step(field, W.UNREACHABLE)
+            if tile is not M.PASS:
+                return tile is not None and self._move(tile)
         blocked = self.blocked()
         if here == W.UNREACHABLE:
             # Standing on a tile the field treats as a wall (a captured camp's spawn tile): step

@@ -33,6 +33,13 @@ class Actions:
         self.acted = False          # attacked or cast this turn
         self.waiting = False        # standing still on purpose (capturing, holding for allies)
         self.squad_gave_up = False  # farm: the squad give-up retarget ran this turn (at most once)
+        if config.MICRO:
+            # The threat layer's view of this mode: the camps we mean to fight are the objective,
+            # a fight steps with the threat off, a retreat weighs it heavier.
+            g = self.d.target_group if mode == config.FARM else self.d.capture_group if mode == config.CAPTURE else None
+            weight = (config.MICRO_FIGHT_WEIGHT if mode == config.FIGHT else
+                      config.MICRO_FLEE_WEIGHT if mode == config.FLEE else config.MICRO_THREAT_WEIGHT)
+            self.nav.micro.turn_reset(g.index if g is not None else -1, weight)
         handler = (self.farm, self.capture, self.tribute, self.recall, self.fight, self.flee)[mode]
         handler(turn)
 
@@ -684,7 +691,10 @@ class Actions:
         dashed = config.FLEE_DASH_AWAY and self.nav.dash_away(threats, w.spawn_field)
         moved = self._escape_step(threats)
         if moved is None:
-            moved = self.nav.step_away(threats, w.spawn_field)
+            if config.MICRO and w.spawn_field.get(w.pos) not in (0, W.UNREACHABLE):
+                moved = self.nav.step_along(w.spawn_field)         # home, through the threat layer
+            else:
+                moved = self.nav.step_away(threats, w.spawn_field)
         if dashed or self.nav.try_dash(w.spawn_field):
             return
         if not moved and nearest.dist <= w.attack_range:

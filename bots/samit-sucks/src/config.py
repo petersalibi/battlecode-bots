@@ -98,6 +98,20 @@ CAMP_CACHE_TURNS = 5        # reuse the camp candidate list for this many turns 
 LOG_DECISIONS = False       # print the camp ranking at every retarget (costs fuel; dev only)
 TRACE_SLOT = -1             # print a per-turn trace line for this body slot (dev only, -1 = off)
 LOG_GROUPS = False          # print the camp group table on the first turn (dev only)
+MICRO = True                # the threat layer (micro.py) picks every step taken with danger about
+MICRO_THREAT_WEIGHT = 10.0  # cost of damage that could land next turn, per share of our effective health ...
+MICRO_FLEE_WEIGHT = 20.0    # ... while retreating ...
+MICRO_FIGHT_WEIGHT = 0.0    # ... and in a fight (0: off, the fight steps to its target)
+MICRO_PROGRESS_WEIGHT = 1.0 # value of one walking turn gained towards the objective
+MICRO_SOFT_RANGE = 2        # an enemy this far beyond its reach next turn still counts ...
+MICRO_SOFT_SHARE = 0.25     # ... at this share of its damage
+MICRO_SIGHTING_FRESH = 6    # rounds the shared enemy sighting counts as a threat (fading) ...
+MICRO_SIGHTING_RANGE = 12   # ... when it is this close to us
+MICRO_ALLY_NEAR = 4         # allies this close to a tile support it ...
+MICRO_ALLY_CAP = 2          # ... counted up to this many ...
+MICRO_ALLY_WEIGHT = 0.3     # ... at this value each
+MICRO_ALLY_AGE = 2          # board positions older than this (rounds) are not used for allies
+MICRO_BACKTRACK = 0.2       # stepping back onto the tile we just left costs this (stops pacing)
 LOG_BOARD = False           # print each body's shared-memory picture every turn (debug builds only; board_check.py)
 
 # ---- Fighting ----------------------------------------------------------------

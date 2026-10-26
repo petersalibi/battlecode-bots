@@ -11,7 +11,7 @@ micro as one influence evaluation per step, and a fixed fuel schedule.
 | 0 (done) | Seed from `hybrid-v42`, scorecard script, top-ten replays | v42 scorecard and top-ten scorecard side by side |
 | 1 (done but quiet turn) | Skeleton on a fixed fuel budget per turn phase; no branch reads fuel remaining | a copy with dormant code mirrors 40-40 exactly; no exhaustions; quiet turn under ~400K |
 | 2 (done) | Shared memory: 5 position bytes (16x16 cells), enemy sighting cell + age, claims by round parity | logged ally positions match the replay within a cell and a round |
-| 3 | Micro: camp-reach cost board, local influence sum (enemy reach, camp reach, sightings, objective, allies), engage rule, focus fire. No flee mode | cohort deaths down and allies at death up against a same-hour control |
+| 3 (in progress) | Micro: camp-reach cost board, local influence sum (enemy reach, camp reach, sightings, objective, allies), engage rule, focus fire. No flee mode | cohort deaths down and allies at death up against a same-hour control |
 | 4 | Macro in the draft: map class, per-body group sequence and partner, bank altars, ward spots on lanes; re-plan only on events | cohort gem margin beats the greedy placeholder |
 | 5 | Switch the submission, tune weights one at a time | |
 
@@ -119,6 +119,41 @@ Board cost on lanes: read ~33K, publish ~20K a turn (the old claim code was ~15K
 are not from that: phase 1 plus a ~30K-a-turn burn against phase 1 (37/40 maps identical) gave 13
 exhaustions to the plain copy's 22. They come from lanes and big-world turns already at ~2.4M, and
 the count swings with the game. Nothing reads positions or sightings yet; phase 3 is the consumer.
+
+## Phase 3 status (2026-10-26): 3a done (threat layer); 3b-3d to come
+
+Sub-steps: **3a** the threat layer in every step; **3b** no flee mode, an engage rule in place of
+the fight/flee rule stack, retreat = home with the layer on; **3c** focus fire; **3d** a fixed fuel
+budget for the layer.
+
+### 3a: `micro.py`
+
+`navigation.step_along` asks `Micro.step` first whenever something could hurt us. It scores
+standing still and the free neighbours: progress along the objective field, minus damage that
+could land on the tile next turn as a share of our effective health (`MICRO_THREAT_WEIGHT` 10,
+`MICRO_FLEE_WEIGHT` 20 in flee, 0 in a fight for now), plus allies within 4 while there is danger.
+Damage sources: visible enemies (reach + 1, a soft 25% two tiles further), awake camps outside the
+group we are fighting for which we would be the nearest champion in reach (a tie counts half), and
+the shared sighting when no enemy is in sight (reach 2 + age, fading over 6 rounds). Allies come
+from vision, else from the phase 2 board. Flee's step is now this layer on the spawn field.
+
+Cost: a tile costs ~13K fuel to score in this interpreter, so only sources whose edge passes
+through our 3x3 neighbourhood are scored (the others add the same to every tile); with none, the
+usual pathing runs. Scoring every source every time cost ~190K a call.
+
+Results, 80 games each (same opponent, dumps scored with `review_metrics.py`):
+
+| vs `hybrid@hybrid-v42` | W-L | margin | deaths/g | ally5@death | ally4 | our exhaustions | our stalls |
+|---|---|---|---|---|---|---|---|
+| phase 2 | 39-38 | -6 | 15.4 | 0.55 | 37% | 44 | 213 |
+| 3a | 44-34 | +78 | 15.1 | 0.59 | 39% | 56 | 250 |
+
+Against phase 2 directly: 38-42, margin +54, deaths 1,065 vs 1,233.
+
+The extra stalls are bodies that will not walk into an awake camp's reach (as its nearest champion)
+until the stall guard retargets (fracture, islands). Removing the camp layer drops them (91 to 59 on
+those two maps, 4 games) but the margin falls from +1,077 to +124; removing the sighting, +389. The
+real fix is a re-plan when the objective sits behind a threat (phase 4).
 
 ## Phase 0 notes
 
