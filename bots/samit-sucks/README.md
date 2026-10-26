@@ -155,6 +155,23 @@ until the stall guard retargets (fracture, islands). Removing the camp layer dro
 those two maps, 4 games) but the margin falls from +1,077 to +124; removing the sighting, +389. The
 real fix is a re-plan when the objective sits behind a threat (phase 4).
 
+### 3b, first try (reverted): flee decisions converted
+
+Every flee decision was turned into something else (`decide._set_mode`), RECALL walking home
+through the layer at flee weight with flee's shield, stun and parting shot:
+
+| vs v42, 80 games | W-L | deaths/g | ally5@death |
+|---|---|---|---|
+| 3a | 44-34 | 15.1 | 0.59 |
+| healthy bodies keep their objective, hurt ones go home | 18-60 | 20.3 | 0.47 |
+| every flee goes home | 39-39 | 15.3 | |
+
+Keeping the objective fails because the layer only votes when a step is taken: a body capturing,
+or standing at its camp attacking, never steps, so it stands while the enemy closes. Going home
+always costs farm time. Removing flee needs the layer to weigh staying to act against moving on
+every turn (the objective's value of standing here against the damage that could land here), not
+only inside `step_along`. That is the next attempt.
+
 ## Phase 0 notes
 
 - Confirmed by watching top-ten replays (2026-10-25): the review's inferences hold. They ward on
