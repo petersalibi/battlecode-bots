@@ -158,6 +158,108 @@ hits whatever camp is in range (`clearing` in the trace). Islands stalls 40 to 1
 concentrated wealth and fracture roughly halved. Sweeps: 40-30 (+29 gems) against v9 and 43-27
 (+95, deaths 1093 vs 1210) against v8.
 
+## Camp targeting, measured (2026-10-23, engine 1.0.3)
+
+The handbook says only that an awake camp attacks "the nearest champion" until it "does not take
+damage for 2 turns". Both teams ran `bots/campprobe` on rushbait-v2: nobody attacks a champion,
+one striker per side hits a chosen wolf on a schedule, and the other bodies stand on scripted
+tiles around it (both teams, across the hole column, at Chebyshev ties that Euclidean and
+Manhattan distance would break differently, and with positions swapped). `tools/camp_target_probe.py`
+reads the replay, lines up each turn-start health loss with the end-of-turn tiles of the round
+before, and scores each candidate rule. One rule fits all 103 scored rounds:
+
+- An awake camp hits the champion nearest it by **Chebyshev** distance among those in its reach,
+  of either team. It does not stay on whoever hit it: a body that steps closer takes the hits from
+  the next round, enemies and bodies across holes included. Euclidean and Manhattan were refuted
+  in rounds where they named the other champion.
+- **Ties** go to the champion that last damaged the camp (it kept the enemy striker even though a
+  lower ID stood at the same distance), else to the tied champion that moves first that round:
+  the starting team alternates each round, so a tie between teams flips every round; within a
+  team the lower draft slot wins whatever the tiles (priority was never set, so it may be
+  priority first).
+- A camp **sleeps after two rounds with no champion in its reach**, however long ago it was last
+  damaged: a wolf kept hitting a striker that stood in reach for eleven rounds after its last hit.
+  The handbook's "no damage for 2 turns" is wrong; its "two rounds without an in-range champion"
+  line is right. A sleeping camp does not attack a champion standing beside it.
+- A hit during round r wakes the camp; its first attack lands at the start of round r+1. Each hit
+  is exactly the camp's strength times the champion's `camp_damage_multiplier` (1.0 base).
+
+What this means for the bot: `world.camp_damage_incoming` counts every living camp with us in
+reach, but a camp only hits us when we are its nearest champion (an ally or enemy standing closer
+takes it), and the fight rules (`power_balance`, `should_stand`, the flee step) ignored camps
+altogether until the camp-aware fights below. Whoever hits a camp keeps it on a tie, so a body can draw a camp off an ally by
+standing one tile closer, and an enemy who walks in closer than us takes the camp's hits. Stepping
+out of reach for two rounds is enough to put a camp to sleep. Only wolves were tested; elks and
+golems are expected to follow the same code. Rerun with
+`cambc run campprobe campprobe --map 00rushbait-v2 --rounds 185 --release -o replays/campprobe`,
+then `python tools/camp_target_probe.py <bundle>.repl26a`.
+
+### Camp-aware fights (2026-10-23, `CAMP_POWER`, `CAMP_CONTACT_GUARD`)
+
+Before this the fight rules saw champions only: a body trading evenly with an enemy while a wolf
+pack chewed on it read as a fair fight, `should_stand` counted champion damage only, and the flee
+step stepped away from enemy champions only (camps were avoided only with no enemy in sight).
+
+**Who a camp is on** (`World._refresh_camp_targets`, run from `_refresh_camps`). Using the rules
+above, each awake group with us in reach is judged at its camp nearest us:
+
+- *safe*: a champion that has already moved this round (`has_completed_turn`) stands nearer the
+  camp than us, or one yet to move is nearer by more than it can change (`CAMP_CLOSE_STEPS`, plus
+  two with a dash);
+- *on us for certain*: nobody, moved or not, can end the round as near as us;
+- *maybe on us*: everything else (a tie, or a champion yet to move within a step of it).
+
+The result is `camp_on_us` and `camp_maybe_us` (damage a turn), `camp_threats` (the camps' tiles)
+and `camp_on_them_eff` (power the visible enemies lose to camps of ours that are on them). We
+cannot know for certain in every case: enemies that move after us this round pick their tiles
+later, a champion hidden in a bush is unseen (camps see through bushes), and a hit on the camp
+we did not see would change a tie. Our own end tile is taken as where we stand.
+
+**Where it is used.**
+
+- `power_balance` (the scripted fight rules: entry, staying, flee, the outnumbered rule,
+  commitment, capture standoffs): our side loses camp damage x `CAMP_THREAT_TURNS` (5) x our
+  damage, a maybe at `CAMP_MAYBE_WEIGHT` (0.5); the enemy side loses `camp_on_them_eff`.
+  `power_balance_raw`, the networks' input, is untouched, so the trained heads see what they
+  were trained on.
+- `should_stand`: camp damage counts only against standing (how long we last where we are),
+  not against the walk home, because camps never chase.
+- The flee step and the recall's step away add the camps on us to the threats, so a retreat
+  leaves their reach as well (two rounds out of reach and a camp sleeps).
+- `CAMP_CONTACT_GUARD`: the contact head decides first with an enemy within 4 and cannot see the
+  camp; its attack or close is overruled (the rules decide) while a camp is on us and the
+  camp-counted balance is under `FLEE_POWER_RATIO`.
+- `camp_damage_incoming` is unchanged (it is a feature of the mode selector).
+
+**Fuel.** Native calls cost about 5-10K and Python loop iterations 4-5K in this runtime. The
+first version scanned every visible camp each contact turn and cost lanes 100-230K a turn (24
+fuel exhaustions over two games against 5). The shipped version runs only when a living camp has
+us in reach with an enemy in sight (the list comes free from the existing reach loop), makes one
+`awake_camp_tiles` call and one awake test per group (a group wakes together), judges at most
+`CAMP_MAX_GROUPS` (2) groups, looks only at champions within twice the reach plus slack, and the
+hidden-bush test was dropped (about 20K). Turns without a camp on us cost nothing beyond a few
+attribute reads (class defaults on `World`). Sweep exhaustions: 74-76 for us against 67-68 for
+the opponent in the same games and 54 in the v42 mirror; the excess is on lanes (7 a game
+against 2-3).
+
+**Results (mirror harness, 80 games each, 2026-10-23).** The control first: the same code with
+`CAMP_POWER = False` is not an exact mirror of v42 (43-37, deaths 1337 vs 1326), because the
+dormant `if` tests shift fuel and so the network gates, as `CLAUDE.md` warns. So both a sweep
+against that switched-off copy and one against v42 were run:
+
+| Version | vs same code switched off | vs v42 |
+|---|---|---|
+| switched off | | 43-37 (+17 gems, deaths 1337 vs 1326) |
+| `CAMP_POWER` | 42-38 (-30, deaths 1398 vs 1330) | 44-36 (+13, deaths 1356 vs 1348) |
+| `CAMP_POWER` + `CAMP_CONTACT_GUARD` (shipped) | 43-37 (-10, deaths 1310 vs 1336) | 45-35 (+43, deaths 1289 vs 1353) |
+
+All inside the harness's plus or minus five games. The guard version is the only one ahead on
+both sweeps with fewer deaths, so it is on, but the mirror cannot show the case it is for (strong
+teams fighting us beside camps): judge it on the +200 band and the ladder before relying on it.
+Next steps if it holds: tune `CAMP_THREAT_TURNS` (3-8), prefer a fight target a camp is already
+hitting, keep the fight path out of awake camps' reach, and use the tie rule on purpose (step
+one tile nearer a camp to take it off an ally).
+
 ## Team memory (`memory_codec.py`)
 
 Shared memory: one claim byte per body (2-bit status, 6-bit group index), byte 6 the last round an

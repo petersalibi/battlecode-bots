@@ -443,6 +443,9 @@ class Decider:
             pick = nn.masked_argmax(scores, ok)
             self.contact_pick = pick
             if pick in (contact_features.ATTACK, contact_features.CLOSE) and mask[FIGHT]:
+                if config.CAMP_POWER and config.CAMP_CONTACT_GUARD and w.camp_on_us + w.camp_maybe_us > 0 \
+                        and w.power_balance() < config.FLEE_POWER_RATIO:
+                    return None                                # the head cannot see the camp on us: the rules decide
                 return FIGHT
             if pick == contact_features.RETREAT and mask[FLEE]:
                 return FLEE
@@ -619,6 +622,10 @@ class Decider:
             if d <= config.STAND_ALLY_RANGE and hp > 0:
                 side_dps += strength
         target = min(near, key=lambda e: e.hp)
+        if config.CAMP_POWER:
+            # Camps do not chase, so they only count against standing: a camp on us (or maybe on
+            # us) shortens how long we last where we are, not the walk home.
+            incoming += w.camp_on_us + w.camp_maybe_us
         return target.hp / side_dps <= config.STAND_EDGE * w.hp / incoming
 
     @staticmethod
